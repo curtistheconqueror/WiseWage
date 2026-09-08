@@ -564,6 +564,8 @@
   .xsched .v{font-weight:800;font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums}
   .xsched button{margin-left:auto}
   #xCalcDay.on{border-color:var(--warn);color:var(--warn)}
+  /* the holiday line inside an earnings tile */
+  .det .holline{color:var(--cal-hol)}
   /* today is a paid holiday */
   .holbar{margin:12px auto 0;max-width:520px;padding:11px 14px;border-radius:12px;
     border:1px solid var(--cal-hol);background:rgba(120,200,255,.10);
@@ -2988,6 +2990,11 @@ function buildLedger(sessions, cfg, nowMs){
       }
       parts.push({ start: c.start, end: c.end, dayMs: c.dayMs, weekKey: c.weekKey, periodKey: c.periodKey,
                    sessionId: s.id, hours: hours, regHours: reg, otHours: ot, qualOt: qual,
+                   /* Which kind of paid leave produced these hours, if any. Without it a
+                      holiday's eight hours are indistinguishable from eight hours worked —
+                      both land in regHours — so a total could not say where it came from. */
+                   leave: !s.paidLeave ? null
+                        : s.holiday ? 'hol' : s.vacation ? 'vac' : s.dayOff ? 'off' : 'leave',
                    nightHours: nightOn ? hours : 0,
                    premNames: c.premNames || null,
                    // What the differential alone added, so it can be shown the way a stub prints it.
@@ -3005,12 +3012,20 @@ function buildLedger(sessions, cfg, nowMs){
 /* Sum the ledger over a time window. Parts never straddle a day, and every window we ask
    about starts and ends on a midnight, so a whole-part test is exact. */
 function sumRange(parts, fromMs, toMs){
-  var t = { hours: 0, regHours: 0, otHours: 0, qualOt: 0, gross: 0 };
+  /* holHours and leaveHours are carved out of regHours, not added to it: paid leave is
+     straight time, so it is already counted there. They exist so a total can say which
+     part of it was worked and which arrived. */
+  var t = { hours: 0, regHours: 0, otHours: 0, qualOt: 0, gross: 0,
+            holHours: 0, holGross: 0, leaveHours: 0 };
   for (var i = 0; i < parts.length; i++){
     var p = parts[i];
     if (p.start >= fromMs && p.end <= toMs){
       t.hours += p.hours; t.regHours += p.regHours; t.otHours += p.otHours;
       t.qualOt += (p.qualOt || 0); t.gross += p.gross;
+      if (p.leave){
+        t.leaveHours += p.hours;
+        if (p.leave === 'hol'){ t.holHours += p.hours; t.holGross += p.gross; }
+      }
     }
   }
   return t;
@@ -4960,7 +4975,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v76';
+var APP_BUILD = 'v77';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -6096,10 +6111,17 @@ function render(){
   document.getElementById('payin').textContent = countdown(+addDays(period.payDate, 0) - now);
 
   /* ---- totals ---- */
+  /* Holiday hours are straight time, so they sit inside regHours and used to be
+     indistinguishable from hours worked — a week with a paid holiday in it simply read
+     eight hours heavier with nothing saying why. Carved out onto a line of its own. */
   function det(t){
+    var hol = t.holHours || 0;
+    var worked = Math.max(0, t.regHours - hol);
     return hrs(t.hours) + (t.otHours > 0.0001
       ? ' &nbsp;·&nbsp; <span class="ot">' + t.otHours.toFixed(2) + ' h OT</span>' : '')
-      + '<br>' + t.regHours.toFixed(2) + ' h reg @ ' + money(cfg.rate)
+      + '<br>' + worked.toFixed(2) + ' h reg @ ' + money(cfg.rate)
+      + (hol > 0.0001 ? '<br><span class="holline">' + hol.toFixed(2) + ' h holiday @ '
+                        + money(cfg.rate) + '</span>' : '')
       + (t.otHours > 0.0001 ? '<br>' + t.otHours.toFixed(2) + ' h OT @ ' + money(ledger.otRate) : '');
   }
   /* Named, because a night shift makes "Today" mean the day the shift belongs to rather

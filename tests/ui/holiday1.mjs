@@ -322,6 +322,46 @@ console.log('\n━━ The clock card says when today is a paid holiday ━━');
   await h6.close();
 }
 
+console.log('\n━━ The earnings tiles say which hours arrived and which were worked ━━');
+/* Holiday hours are straight time, so they land in regHours alongside hours actually
+   worked. A week with a paid holiday in it simply read eight hours heavier and nothing
+   said why. */
+{
+  const U=(d,h,mi=0)=>Date.UTC(2026,8,d,h+5,mi);            // Chicago CDT
+  const ctxT=await b.newContext({viewport:{width:430,height:1200},
+    timezoneId:'America/Chicago',locale:'en-US'});
+  const cfg={rate:37.78,otMode:'eight40',weeklyThreshold:40,shiftThreshold:8,otMultiplier:1.5,
+    periodAnchor:'2026-09-06',periodLengthDays:14,payDateOffsetDays:13,weekStartDay:0,
+    workDays:[true,true,true,true,true,false,false],schedStart:'14:00',schedEnd:'22:30',
+    lunchMins:30,banks:[],daysOff:[]};
+  const sun={id:'sun',start:U(6,13,18),end:U(7,1,6)};
+  const mon={id:'mon',start:U(7,14),end:U(7,23,17)};        // Labor Day, worked
+  const tue={id:'tue',start:U(8,14),end:U(8,22,30)};        // earns the holiday
+
+  let t1=await boot(ctxT, {configured:true,cfg,sessions:[sun,mon,tue],activeStart:null,sound:false},
+    U(9,12));
+  {
+    const d=(await t1.innerText('#wDet')).replace(/\s+/g,' ');
+    ok('the holiday has a line of its own', /8\.00 h holiday/.test(d), d);
+    ok('at straight time', /8\.00 h holiday @ \$37\.78/.test(d), d);
+    ok('and it is not double-counted into the worked hours',
+       /24\.00 h reg/.test(d), d);
+    ok('overtime still stands separately', /4\.08 h OT @ \$56\.67/.test(d), d);
+    ok('the line is marked as a holiday', (await t1.locator('#wDet .holline').count())===1);
+  }
+  await t1.close();
+
+  /* Before the day after is worked the holiday is not earned, so nothing is claimed. */
+  let t2=await boot(ctxT, {configured:true,cfg,sessions:[sun,mon],activeStart:null,sound:false},
+    U(8,10));
+  {
+    const d=(await t2.innerText('#wDet')).replace(/\s+/g,' ');
+    ok('an unearned holiday adds no line', !/holiday/.test(d), d);
+    ok('and no hours', /16\.00 h reg/.test(d), d);
+  }
+  await t2.close();
+}
+
 console.log(`\n${fails===0?'✅':'❌'}  ${fails===0?'all passed':fails+' failed'}`);
 await b.close(); srv.close();
 process.exit(fails===0?0:1);

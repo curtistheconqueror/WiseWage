@@ -1557,6 +1557,43 @@ group('Robustness');
 }
 
 
+/* ---------------- a total can say which part of it was worked ---------------- */
+{
+  const D=(d,h,mi=0)=>+new Date(2026,8,d,h,mi);
+  const cfg={...E.DEFAULTS,rate:40,otMultiplier:1.5,otMode:'eight40',weeklyThreshold:40,
+    shiftThreshold:8,periodAnchor:'2026-09-06',periodLengthDays:14,payDateOffsetDays:13,
+    weekStartDay:0,workDays:[true,true,true,true,true,false,false],
+    schedStart:'14:00',schedEnd:'22:30',lunchMins:0,
+    holidays:E.holidaysFromCatalog(['labor']),banks:[],daysOff:[],vacations:[]};
+  /* Labor Day 2026 is Mon Sep 7; the rostered days either side are Sun 6 and Tue 8. */
+  const work=[{id:'sun',start:D(6,14),end:D(6,22)},{id:'tue',start:D(8,14),end:D(8,22)}];
+  const t=E.sumRange(E.buildLedger(work,cfg).parts,D(6,0),D(13,0));
+
+  ok('the holiday is in the total', Math.abs(t.hours-24)<0.005, String(t.hours));
+  /* Straight time, so it lands in regHours — which is exactly why it needs carving out. */
+  ok('and inside the regular hours', Math.abs(t.regHours-24)<0.005, String(t.regHours));
+  ok('holHours names the eight that arrived', Math.abs(t.holHours-8)<0.005, String(t.holHours));
+  ok('and what they were worth', Math.abs(t.holGross-320)<0.005, String(t.holGross));
+  ok('so the hours actually worked can be told apart',
+     Math.abs((t.regHours-t.holHours)-16)<0.005, String(t.regHours-t.holHours));
+  ok('leaveHours counts every kind of paid leave', Math.abs(t.leaveHours-8)<0.005, String(t.leaveHours));
+
+  /* A week with no holiday reports zero rather than undefined, so callers can add freely. */
+  const plain=E.sumRange(E.buildLedger(work,{...cfg,holidays:[]}).parts,D(6,0),D(13,0));
+  ok('a week without one reports zero, not undefined',
+     plain.holHours===0 && plain.holGross===0 && plain.leaveHours===0,
+     JSON.stringify([plain.holHours,plain.holGross,plain.leaveHours]));
+
+  /* A sick day is paid leave but not a holiday — the two must not be conflated. */
+  const sickCfg={...cfg,holidays:[],
+    banks:[{id:'sick',name:'Sick day',count:5,hours:8,ot:false,makeUp:true,slots:[]}],
+    daysOff:[{id:'d1',bank:'sick',slot:null,date:'2026-09-09'}]};
+  const sk=E.sumRange(E.buildLedger(work,sickCfg).parts,D(6,0),D(13,0));
+  ok('a sick day counts as leave but not as a holiday',
+     Math.abs(sk.leaveHours-8)<0.005 && sk.holHours===0,
+     'leave '+sk.leaveHours+' hol '+sk.holHours);
+}
+
 /* ---------------- work on a day you are not rostered ---------------- */
 {
   const D=(d,h,mi=0)=>+new Date(2026,8,d,h,mi);
