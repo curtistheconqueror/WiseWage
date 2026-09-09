@@ -4975,7 +4975,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v77';
+var APP_BUILD = 'v78';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -11019,7 +11019,44 @@ window.addEventListener('storage', function(e){
 try {
   if ('serviceWorker' in navigator && navigator.serviceWorker) {
     window.addEventListener('load', function(){
-      try { navigator.serviceWorker.register('./sw.js').catch(function(){}); } catch(e){}
+      try {
+        navigator.serviceWorker.register('./sw.js').then(function(reg){
+          if (!reg) return;
+          /* Registering an already-registered worker does not reliably re-check the script
+             on iOS — Safari decides when to look, and it can be a day. Asking outright is
+             the difference between an update arriving and an update being hoped for.
+             Checked again whenever the app is brought back to the foreground, because a
+             home-screen app is resumed far more often than it is cold-started. */
+          /* update() returns a promise, and it rejects whenever the check cannot be made
+             — no signal, or the file briefly unreachable. That is not a failure worth
+             surfacing: the app is running and will simply ask again next time. Left
+             unhandled it logs an error on every foreground. */
+          var ask = function(){
+            try {
+              var u = reg.update();
+              if (u && u.catch) u.catch(function(){});
+            } catch(e){}
+          };
+          ask();
+          document.addEventListener('visibilitychange', function(){
+            if (!document.hidden) ask();
+          });
+        }).catch(function(){});
+
+        /* When a NEW worker replaces an existing one, the page in front of you is still
+           the old build; reload once so the screen matches what is installed.
+
+           Two guards, both load-bearing. Only when a worker was already in charge: on a
+           first install the page came straight from the network and is current, so
+           reloading it achieves nothing and costs a flash. And only once, because a
+           controllerchange loop would make the app unusable rather than merely stale. */
+        var hadWorker = !!navigator.serviceWorker.controller, swapped = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function(){
+          if (!hadWorker || swapped) return;
+          swapped = true;
+          try { location.reload(); } catch(e){}
+        });
+      } catch(e){}
     });
   }
 } catch(e){}

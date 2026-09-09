@@ -7,7 +7,7 @@
    with "a problem repeatedly occurred").
 
    Static assets (icons, manifest) stay cache-first; they effectively never change. */
-const CACHE = 'wisewage-v77';
+const CACHE = 'wisewage-v78';
 const ASSETS = ['./', './index.html', './manifest.webmanifest',
                 './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png'];
 
@@ -30,17 +30,22 @@ self.addEventListener('fetch', e => {
                  /(\/|index\.html)$/.test(new URL(e.request.url).pathname);
 
   if (isPage) {
-    /* Network first, and explicitly past the browser's own HTTP cache.
+    /* Network first, past the browser's own HTTP cache.
 
-       GitHub Pages serves HTML with max-age=600. Chromium turns out to revalidate here
-       anyway — a test that serves the page with that header and changes it mid-flight
-       passes with or without the no-store below — so this is a precaution, not a fix for
-       any bug reproduced in this repo. It is kept because WebKit cannot be tested in this
-       sandbox and is the stricter HTTP cache of the two, and because "always ask the
-       origin" is what this branch is meant to mean. If it ever needs removing, the
-       plain fetch(e.request) form behaves identically under test. */
+       This used to pass { cache: 'no-store' }, with a comment saying WebKit could not be
+       tested in this sandbox. It could not, and it was the thing that broke: an iPhone sat
+       on a build for over a day across seven cold starts while the server had the new one.
+       If that option is unsupported or the fetch rejects for any reason, this branch falls
+       through to the cached copy — and because the cache is only rewritten on a successful
+       fetch, a device that lands there once stays on that page forever. A stale-forever app
+       is a worse failure than a stale-for-ten-minutes one.
+
+       A unique query string does the same job using nothing but a URL, which every engine
+       supports. GitHub Pages ignores the parameter and serves the same file. */
+    const bust = e.request.url + (e.request.url.indexOf('?') > -1 ? '&' : '?')
+               + '_sw=' + Date.now();
     e.respondWith(
-      fetch(e.request.url, { cache: 'no-store' })
+      fetch(bust, { credentials: 'same-origin' })
         .then(res => {
           if (res && res.ok) {
             const copy = res.clone();

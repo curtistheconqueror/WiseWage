@@ -19,6 +19,9 @@ const R = ROOT;
 const TYPES={'.html':'text/html','.js':'text/javascript','.webmanifest':'application/manifest+json',
              '.png':'image/png','.json':'application/json'};
 let marker = 'BUILD-ALPHA';
+/* Flipped by the test to make the origin unreachable for the page, the way a phone with
+   no signal — or a fetch the engine refuses — looks to the worker. */
+let fail = false;
 /* Everything the worker precaches has to be served for real: install runs
    cache.addAll(ASSETS), and a single 404 in there rejects the whole install, so the
    worker never activates and the test measures nothing. */
@@ -26,6 +29,7 @@ const srv=http.createServer((q,r)=>{
   let path=decodeURIComponent(q.url.split('?')[0]);
   const isPage = path==='/' || path==='/index.html';
   if (isPage){
+    if (fail){ r.destroy(); return; }
     // the page, served exactly the way GitHub Pages serves it
     const html=readFileSync(R+'index.html','utf8').replace('<title>','<title>'+marker+' ');
     r.writeHead(200,{'Content-Type':'text/html','Cache-Control':'max-age=600'});
@@ -82,6 +86,25 @@ console.log('\n━━ Back online, a later deploy still arrives ━━');
 marker = 'BUILD-DELTA';
 await p.reload(); await p.waitForTimeout(900);
 ok('current again', (await p.title()).includes('BUILD-DELTA'), await p.title());
+
+console.log('\n━━ A device that once fell back to cache does not stay there ━━');
+/* The real failure this guards against: an iPhone sat on one build for over a day across
+   seven cold starts while the server had the next one. The worker fetched the page with
+   { cache: 'no-store' }; if that option is unsupported or the fetch rejects for any
+   reason, the branch falls through to the cached copy — and since the cache is only
+   rewritten after a SUCCESSFUL fetch, a device that lands there once never leaves.
+   Simulated by failing the page request outright, then letting it recover. */
+{
+  marker = 'BUILD-ECHO';
+  fail = true;                                  // every page request now errors
+  await p.reload().catch(()=>{}); await p.waitForTimeout(900);
+  ok('offline-ish, it still opens from cache', /BUILD-/.test(await p.title()), await p.title());
+  fail = false;                                 // the network comes back
+  marker = 'BUILD-FOXTROT';
+  await p.reload(); await p.waitForTimeout(900);
+  ok('and the very next open is current again, not pinned to the cached copy',
+     (await p.title()).includes('BUILD-FOXTROT'), await p.title());
+}
 
 console.log(`\n${fails===0?'✅':'❌'}  ${fails===0?'all passed':fails+' failed'}`);
 await b.close(); srv.close();
