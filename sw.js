@@ -1,4 +1,4 @@
-/* Offline cache for Pay Clock.
+/* Offline cache for WiseWage.
 
    The page itself is fetched NETWORK-FIRST: every launch tries the live site and falls
    back to the cached copy only when offline. Updates therefore arrive on the first
@@ -7,9 +7,15 @@
    with "a problem repeatedly occurred").
 
    Static assets (icons, manifest) stay cache-first; they effectively never change. */
-const CACHE = 'wisewage-v78';
-const ASSETS = ['./', './index.html', './manifest.webmanifest',
+const CACHE = 'wisewage-v79';
+const ASSETS = ['./', './index.html', './manifest.webmanifest', './apple-touch-icon.png',
                 './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png'];
+
+/* True only for the app page itself. `mode === 'navigate'` is not enough on its own:
+   fresh.html is also a navigation, and caching its response under the './index.html' key
+   would leave the offline fallback serving the escape hatch — a launch with no network
+   would unregister the worker and wipe the cache instead of opening the app. */
+const isAppPage = url => /(^|\/)(index\.html)?$/.test(new URL(url).pathname);
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -47,7 +53,7 @@ self.addEventListener('fetch', e => {
     e.respondWith(
       fetch(bust, { credentials: 'same-origin' })
         .then(res => {
-          if (res && res.ok) {
+          if (res && res.ok && isAppPage(e.request.url)) {
             const copy = res.clone();
             // Stored under the canonical key so the offline fallback below always finds
             // the newest copy, whichever URL form the launch used.
@@ -55,7 +61,9 @@ self.addEventListener('fetch', e => {
           }
           return res;
         })
-        .catch(() => caches.match('./index.html').then(hit => hit || caches.match(e.request)))
+        .catch(() => (isAppPage(e.request.url)
+          ? caches.match('./index.html').then(hit => hit || caches.match(e.request))
+          : caches.match(e.request)))
     );
     return;
   }

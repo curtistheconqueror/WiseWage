@@ -2417,6 +2417,22 @@
         <button class="mini" id="restore">⇧ Restore from backup</button>
         <button class="mini danger" id="wipe">Erase all data</button>
       </div>
+      <!-- An app cached for offline use can end up serving an old copy of itself, and no
+           amount of closing and reopening shifts it — the cached copy is what answers every
+           launch. This asks for the newest one outright.
+
+           Deliberately next to Backup and nowhere near Erase: it removes the cached copy of
+           the app, never the data. Saying so on the button matters, because "refresh" in an
+           app that holds a year of someone's shifts is a frightening word. -->
+      <div class="f" style="margin-top:18px"><label>This app</label>
+        <div class="note">Running build <b id="verNote">—</b>. Updates normally arrive on
+        their own; use this if the build below stops changing after a new one is released.
+        It clears the cached copy of the app only — your shifts and settings are untouched.</div>
+      </div>
+      <div class="actions" style="justify-content:flex-start;margin-top:10px">
+        <button class="mini" id="swRefresh">↻ Check for a new version</button>
+        <span class="note" id="swState" style="align-self:center"></span>
+      </div>
         </div>
       </details>
     </details>
@@ -4975,7 +4991,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v78';
+var APP_BUILD = 'v79';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -10998,6 +11014,54 @@ syncControls();
 (function(){
   var v = document.getElementById('appVer');
   if (v) v.textContent = ' · ' + APP_BUILD;
+  var n = document.getElementById('verNote');
+  if (n) n.textContent = APP_BUILD;
+})();
+
+/* Ask for the newest build, by hand.
+
+   A cached app can end up answering every launch with an old copy of itself, and the one
+   thing that cannot fix it is shipping a fix — the new code is exactly what cannot arrive.
+   So the control has to already be there.
+
+   It removes the worker and its caches and nothing else. localStorage is where the shifts,
+   the settings and the signature live, and none of it is read or written here; every other
+   app published on this domain is likewise untouched, which matters because GitHub Pages
+   gives them all one shared origin and clearing site data would take the lot. */
+(function(){
+  var btn = document.getElementById('swRefresh');
+  if (!btn) return;
+  var state = document.getElementById('swState');
+  var say = function(t){ if (state) state.textContent = t; };
+  btn.onclick = function(){
+    btn.disabled = true;
+    say('Checking…');
+    var jobs = [];
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations){
+        jobs.push(navigator.serviceWorker.getRegistrations().then(function(regs){
+          return Promise.all(regs.map(function(r){ return r.unregister().catch(function(){}); }));
+        }).catch(function(){}));
+      }
+    } catch(e){}
+    try {
+      if (window.caches && caches.keys){
+        jobs.push(caches.keys().then(function(keys){
+          /* This app's caches only. A name belonging to something else on this domain is
+             left where it is. */
+          return Promise.all(keys.filter(function(k){ return /wisewage|pay-?clock/i.test(k); })
+            .map(function(k){ return caches.delete(k).catch(function(){}); }));
+        }).catch(function(){}));
+      }
+    } catch(e){}
+    Promise.all(jobs).then(function(){
+      say('Reopening…');
+      /* A fresh query string so the reload cannot be answered from an HTTP cache either. */
+      setTimeout(function(){
+        try { location.href = './?fresh=' + Date.now(); } catch(e){ location.reload(); }
+      }, 600);
+    });
+  };
 })();
 applyStage();
 render();

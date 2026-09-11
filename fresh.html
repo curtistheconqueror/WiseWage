@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>WiseWage — force an update</title>
+<!-- An escape hatch, deliberately kept outside the app.
+
+     A service worker that gets stuck serving an old page cannot be fixed by the page it is
+     serving: any fix shipped to index.html is exactly the thing that cannot arrive. The
+     usual advice — clear the site's data — is far too blunt on GitHub Pages, where every
+     project a person publishes shares one origin and therefore one storage bucket. Clearing
+     it to fix one app silently destroys the saved data of every other.
+
+     This page unregisters the worker and empties its caches, and touches localStorage
+     nowhere. Your shifts, settings and signature are stored there and are not affected,
+     nor is anything belonging to any other app on this domain. -->
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;padding:28px 20px;background:#0b1020;color:#e8eefc;
+    font:16px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+  .wrap{max-width:560px;margin:0 auto}
+  h1{font-size:21px;margin:0 0 6px}
+  .sub{color:#93a3c4;font-size:14px;margin:0 0 22px}
+  .card{border:1px solid #33445f;border-radius:14px;padding:16px;margin-bottom:14px;
+    background:rgba(255,255,255,.03)}
+  .k{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#93a3c4;
+    font-weight:800;display:block;margin-bottom:5px}
+  b{color:#35d0e0}
+  button{font:inherit;font-weight:800;cursor:pointer;border-radius:12px;padding:15px 22px;
+    min-height:52px;width:100%;border:1px solid #35d0e0;background:#35d0e0;color:#05080f}
+  button.ghost{background:transparent;color:#e8eefc;border-color:#33445f;margin-top:10px}
+  #log{white-space:pre-wrap;font:13px/1.5 ui-monospace,Menlo,monospace;color:#93a3c4;
+    margin-top:14px}
+  .safe{border-color:#51e08a}
+  .safe .k{color:#51e08a}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Force an update</h1>
+  <p class="sub">For when the app keeps opening an old build no matter how many times you
+  close and reopen it.</p>
+
+  <div class="card safe">
+    <span class="k">Your data is not touched</span>
+    Shifts, settings and your signature live in this browser's local storage. This page does
+    not read or write any of it, and does not affect any other app published on this domain.
+    It removes only the cached copy of the app itself.
+  </div>
+
+  <div class="card">
+    <span class="k">What this does</span>
+    Unregisters the service worker holding the old page, empties its caches, then reopens
+    the app so it loads fresh from the server.
+  </div>
+
+  <button id="go">Clear the cached app and reopen</button>
+  <button class="ghost" id="back">Go back without changing anything</button>
+  <div id="log"></div>
+</div>
+
+<script>
+/* No service worker is registered by this page, on purpose — registering one here is what
+   it exists to undo. */
+var log = document.getElementById('log');
+function say(s){ log.textContent += s + '\n'; }
+
+document.getElementById('back').onclick = function(){ location.href = './'; };
+
+document.getElementById('go').onclick = function(){
+  var btn = document.getElementById('go');
+  btn.disabled = true;
+  btn.textContent = 'Working…';
+  log.textContent = '';
+
+  var jobs = [];
+
+  /* Unregister every worker registered for this app. getRegistrations covers the case
+     where more than one scope ended up registered over time. */
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations){
+      jobs.push(
+        navigator.serviceWorker.getRegistrations().then(function(regs){
+          say('service workers found: ' + regs.length);
+          return Promise.all(regs.map(function(r){
+            return r.unregister().then(function(done){
+              say(done ? '  unregistered ' + r.scope : '  could not unregister ' + r.scope);
+            }).catch(function(){ say('  could not unregister ' + r.scope); });
+          }));
+        }).catch(function(){ say('service workers: could not be listed'); })
+      );
+    } else {
+      say('service workers: not supported here, nothing to remove');
+    }
+  } catch(e){ say('service workers: not reachable'); }
+
+  /* Only this app's caches. Named caches from anything else on the domain are left alone,
+     which is the whole point of doing it this way rather than clearing site data. */
+  try {
+    if (window.caches && caches.keys){
+      jobs.push(
+        caches.keys().then(function(keys){
+          var mine = keys.filter(function(k){ return /wisewage|pay-?clock/i.test(k); });
+          say('caches belonging to this app: ' + mine.length + ' of ' + keys.length);
+          return Promise.all(mine.map(function(k){
+            return caches.delete(k).then(function(){ say('  removed ' + k); });
+          }));
+        }).catch(function(){ say('caches: could not be listed'); })
+      );
+    }
+  } catch(e){ say('caches: not reachable'); }
+
+  Promise.all(jobs).then(function(){
+    say('');
+    say('done — reopening the app…');
+    /* A fresh query string so the reopen cannot be answered from any HTTP cache either. */
+    setTimeout(function(){ location.href = './?fresh=' + Date.now(); }, 1200);
+  });
+};
+</script>
+</body>
+</html>

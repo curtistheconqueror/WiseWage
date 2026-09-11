@@ -106,6 +106,108 @@ console.log('\n━━ A device that once fell back to cache does not stay there 
      (await p.title()).includes('BUILD-FOXTROT'), await p.title());
 }
 
+console.log('\n━━ The refresh button: clears the app, keeps the data ━━');
+/* The escape hatch for a worker that will not let go. It has to be already present in the
+   app, because the one thing that cannot fix a stuck cache is shipping a fix.
+
+   The blunt alternative — clearing the site's data — is wrong on GitHub Pages, where every
+   project a person publishes shares one origin and therefore one storage bucket. Clearing
+   it to fix one app destroys the saved data of every other. So this asserts the narrow
+   thing: the new build arrives, and nothing stored is lost, including a second app's. */
+{
+  fail = false;
+  marker = 'BUILD-GOLF';
+  await p.goto('http://localhost:8117/');
+  await p.evaluate(()=>navigator.serviceWorker.ready.catch(()=>{}));
+  await p.reload(); await p.waitForTimeout(900);
+
+  await p.evaluate(()=>{
+    localStorage.setItem('payclock.v1', JSON.stringify({configured:true,
+      cfg:{rate:37.78,periodAnchor:'2026-09-06',periodLengthDays:14,payDateOffsetDays:13,
+           sheet:{name:'A. Worker',init:'AW',dept:'',sect:'',title:'',sig:'data:image/png;base64,AAAA'}},
+      sessions:[{id:'s1',start:Date.now()-7200e3,end:Date.now()-3600e3}],
+      activeStart:null,sound:false}));
+    /* Stands in for another GitHub Pages project of the same person, on the same origin. */
+    localStorage.setItem('otherproject.data','DO-NOT-LOSE-ME');
+  });
+  await p.reload(); await p.waitForTimeout(900);
+  ok('a worker is in charge before we start', await p.evaluate(()=>!!navigator.serviceWorker.controller));
+  ok('and the app has a shift and a signature stored',
+     (await p.evaluate(()=>state.sessions.length))===1
+     && (await p.evaluate(()=>!!state.cfg.sheet.sig)));
+
+  marker = 'BUILD-HOTEL';                       // a deploy goes out
+  await p.evaluate(()=>{document.querySelectorAll('#cfg details').forEach(d=>d.open=true);});
+  await p.waitForTimeout(300);
+  ok('the button names the build it is running',
+     /v\d+/.test(await p.textContent('#verNote')), await p.textContent('#verNote'));
+  await p.locator('#swRefresh').scrollIntoViewIfNeeded();
+  await Promise.all([p.waitForNavigation({timeout:15000}).catch(()=>{}), p.click('#swRefresh')]);
+  await p.waitForTimeout(1800);
+
+  ok('pressing it brings the new build in', (await p.title()).includes('BUILD-HOTEL'),
+     await p.title());
+  ok('the shift is still there', (await p.evaluate(()=>state.sessions.length))===1,
+     String(await p.evaluate(()=>state.sessions.length)));
+  ok('so is the signature', await p.evaluate(()=>!!(state.cfg.sheet && state.cfg.sheet.sig)));
+  ok('and the rate', (await p.evaluate(()=>state.cfg.rate))===37.78);
+  /* The assertion that makes this safe to recommend at all. */
+  ok('another app on the same origin is untouched',
+     (await p.evaluate(()=>localStorage.getItem('otherproject.data')))==='DO-NOT-LOSE-ME',
+     String(await p.evaluate(()=>localStorage.getItem('otherproject.data'))));
+  /* Offline support must come back, or the fix costs the feature. */
+  await p.waitForTimeout(700);
+  ok('and a worker is registered again afterwards',
+     await p.evaluate(()=>navigator.serviceWorker.getRegistrations().then(r=>r.length>0)));
+}
+
+console.log('\n━━ fresh.html, for when the app itself cannot be reached ━━');
+{
+  await p.goto('http://localhost:8117/fresh.html'); await p.waitForTimeout(600);
+  ok('it is its own page, not the app', (await p.title()).indexOf('force an update')>-1,
+     await p.title());
+  ok('with a button to clear the cached app', (await p.locator('#go').count())===1);
+  ok('and it says plainly that data is safe',
+     /not touched/i.test(await p.textContent('body')));
+  ok('it registers no worker of its own — that is what it undoes',
+     !/serviceWorker\.register/.test(readFileSync(R+'fresh.html','utf8')));
+  /* Mentioning it in a comment is the point; calling it is what must never happen. */
+  ok('and never reads or writes stored data',
+     !/localStorage\s*\.\s*(get|set|remove|clear)/.test(readFileSync(R+'fresh.html','utf8')));
+  ok('nor clears storage wholesale',
+     !/caches\.delete\(k\)(?!.*wisewage)/.test('') &&
+     !/clear\(\)/.test(readFileSync(R+'fresh.html','utf8').replace(/\/\*[\s\S]*?\*\//g,'')));
+}
+
+/* fresh.html is a navigation too, so it takes the worker's network-first page branch, and
+   that branch writes whatever it fetched in under the './index.html' key. Left alone,
+   merely visiting the escape hatch replaces the cached app with the escape hatch — and the
+   next launch without a signal opens a page whose whole job is to unregister the worker and
+   delete the cache. The offline fallback would be a self-destruct button. */
+console.log('\n━━ Visiting fresh.html must not become the offline app ━━');
+{
+  marker = 'BUILD-INDIA';
+  await p.goto('http://localhost:8117/'); await p.waitForTimeout(1200);
+  await p.goto('http://localhost:8117/fresh.html'); await p.waitForTimeout(1200);
+
+  const cached = await p.evaluate(() => caches.keys()
+    .then(ks => caches.open(ks.find(k => /wisewage/.test(k)) || ks[0]))
+    .then(c => c.match('./index.html'))
+    .then(r => r ? r.text() : '')
+    .catch(() => ''));
+  ok('the cached app page is not the escape hatch',
+     cached.length > 0 && cached.indexOf('force an update') === -1,
+     cached.slice(0, 60).replace(/\s+/g, ' '));
+
+  /* The proof that matters: go offline and open the app. */
+  fail = true;
+  await p.goto('http://localhost:8117/').catch(()=>{});
+  await p.waitForTimeout(1000);
+  ok('so an offline launch still opens the app, not the reset page',
+     (await p.title()).indexOf('force an update') === -1, await p.title());
+  fail = false;
+}
+
 console.log(`\n${fails===0?'✅':'❌'}  ${fails===0?'all passed':fails+' failed'}`);
 await b.close(); srv.close();
 process.exit(fails===0?0:1);
