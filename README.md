@@ -116,8 +116,25 @@ Set `PW_CHROME` to use a particular browser build rather than Playwright's own.
 |---|---|
 | `index.html` | The entire app — markup, styling, pay engine, UI |
 | `manifest.webmanifest`, `sw.js`, `icons/` | Home-screen install and offline cache |
+| `fresh.html` | Escape hatch: clears the cached app when a stuck copy won't update. Never touches your data |
+| `tools/icon.mjs` | Draws the app icon and writes every size from one source |
 | `tests/pay-engine.test.mjs` | The engine suite — no dependencies |
 | `tests/ui/`, `tests/run-ui.mjs` | Browser suites and their runner |
+
+### Changing the icon
+
+The icon is generated rather than hand-exported, so the four sizes cannot drift apart. Edit
+the constants at the top of `tools/icon.mjs` — `BG` and `INK` are the two colours, `W` is
+the letterform, and `SCALE` / `LIFT` / `GAP` set how the two W's sit together — then:
+
+```sh
+node tools/icon.mjs          # add PW_CHROME=/path/to/chrome if Playwright can't find one
+```
+
+That rewrites `icons/icon.svg` (the reviewable source) and all four PNGs together. Bump
+`APP_BUILD` in `index.html` and `CACHE` in `sw.js` so installed copies fetch the new one.
+iOS caches home-screen icons hard — an existing install usually keeps the old icon until it
+is removed from the Home Screen and re-added.
 
 ## Worth knowing
 
