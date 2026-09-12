@@ -57,6 +57,10 @@ const st=(o={})=>({configured:true,cfg:{...CFG,...(o.cfg||{})},sessions:o.sessio
 
 console.log('\n━━ 1. First run, exactly as a new user meets it ━━');
 await boot('2026-07-27T21:00:00Z', null);           // Mon Jul 27, 5 PM ET
+/* First run stops at the welcome screen now — Lite or Full. This suite exercises the
+   full setup form, so take the Full path through it. */
+if (await page.isVisible('#welcome')){ await page.click('#wPick button[data-mode="full"]');
+  await page.waitForTimeout(400); }
 ok('opens on setup, not a broken screen', await page.isVisible('#setup'));
 ok('clock hidden until configured', !(await page.isVisible('#hero')));
 ok('refuses to start with no rate', await (async()=>{await page.click('#sSave');await page.waitForTimeout(200);
@@ -176,7 +180,9 @@ const dl=await Promise.all([page.waitForEvent('download'),page.click('#backup')]
 await dl.saveAs(join(TMP, 'smoke-backup.json'));
 await page.click('#wipe'); await page.waitForTimeout(150);
 await page.click('#wipe'); await page.waitForTimeout(400);
-ok('erase returns to setup', await page.isVisible('#setup'));
+/* Erase clears the stored Lite/Full choice along with everything else, so it lands all the
+   way back at the welcome screen rather than at setup — which is what erasing should mean. */
+ok('erase returns to the very beginning', await page.isVisible('#welcome'));
 await page.setInputFiles('#restoreFile',join(TMP, 'smoke-backup.json')); await page.waitForTimeout(500); await openAll(page);
 ok('restore brings it all back', !(await page.isVisible('#setup')) && Math.abs(await N('#cumeGross')-380)<0.01, await T('#cumeGross'));
 ok('rate restored', (await T('#liveline')).includes('$38.00'), await T('#liveline'));

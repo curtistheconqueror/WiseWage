@@ -176,6 +176,12 @@ const freshCtx = await b.newContext({viewport:{width:1100,height:2200},
 const fresh = await freshCtx.newPage();
 await fresh.clock.install({time:new Date(T(12,12))});
 await fresh.goto('http://localhost:8127/'); await fresh.waitForTimeout(700);
+/* First run stops at the welcome screen, and the overtime picker lives on the full setup
+   form behind it. Lite does not offer these six rules at all — it takes the ordinary weekly
+   one and leaves the rest to Settings — so Full is the path this section is about. */
+if (await fresh.isVisible('#welcome')){
+  await fresh.click('#wPick button[data-mode="full"]'); await fresh.waitForTimeout(400);
+}
 const modes = await fresh.evaluate(()=>[...document.querySelectorAll('#sMode button')]
   .map(x=>x.dataset.m));
 /* The invariant that matters is not how many rules there are, but that the two pickers

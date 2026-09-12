@@ -20,6 +20,10 @@ await p.waitForTimeout(500);
 ok('page renders from file://', (await p.title()).includes('WiseWage'), await p.title());
 ok('localStorage is usable from file://',
    await p.evaluate(()=>{try{localStorage.setItem('t','1');const v=localStorage.getItem('t')==='1';localStorage.removeItem('t');return v;}catch(e){return false;}}));
+/* First run stops at the welcome screen now — Lite or Full. This suite exercises the
+   full setup form, so take the Full path through it. */
+if (await p.isVisible('#welcome')){ await p.click('#wPick button[data-mode="full"]');
+  await p.waitForTimeout(400); }
 ok('setup screen shows', await p.isVisible('#setup'));
 await p.fill('#sRate','38'); await p.fill('#sAnchor','2026-07-26');
 await p.selectOption('#sLen','14'); await p.selectOption('#sPay','13');

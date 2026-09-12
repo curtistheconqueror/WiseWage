@@ -42,7 +42,11 @@ p.on('console', m => { const t = m.text();
 await p.clock.install({ time: new Date('2026-07-27T21:00:00Z') });   // Mon Jul 27, 5:00 PM ET
 await p.goto('http://localhost:8096/'); await p.waitForTimeout(400); await openAll(p);
 let f = p.frames()[1];
-// The app now opens on first-run setup; complete it before exercising the log.
+// The app now opens on the welcome screen and then setup; clear both before the log. Full,
+// because this suite drives the full setup form's fields.
+if (await f.isVisible('#welcome')) {
+  await f.click('#wPick button[data-mode="full"]'); await p.waitForTimeout(400);
+}
 if (await f.isVisible('#setup')) {
   await f.fill('#sRate','38'); await f.fill('#sAnchor','2026-07-26');
   await f.selectOption('#sLen','14'); await f.selectOption('#sPay','13');

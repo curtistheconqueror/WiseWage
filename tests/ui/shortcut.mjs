@@ -139,6 +139,10 @@ console.log('\n━━ Nonsense is ignored rather than thrown ━━');
   await p.close();
   p = await go('?action=clockin', null);            // never set up
   ok('a link into an unconfigured app does not punch', !(await running(p)));
+    /* First run stops at the welcome screen now — Lite or Full. This suite exercises the
+     full setup form, so take the Full path through it. */
+  if (await p.isVisible('#welcome')){ await p.click('#wPick button[data-mode="full"]');
+    await p.waitForTimeout(400); }
   ok('it shows setup instead', await p.isVisible('#setup'));
   await p.close();
 }

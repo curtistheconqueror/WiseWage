@@ -26,6 +26,10 @@ await p.goto('http://localhost:8090/'); await p.waitForTimeout(600); await openA
 const f=p.frames()[1]; await openAll(f);
 
 console.log('\nStorage blocked (an embedded frame, like the artifact)');
+/* First run stops at the welcome screen now — Lite or Full. This suite exercises the
+   full setup form, so take the Full path through it. */
+if (await f.isVisible('#welcome')){ await f.click('#wPick button[data-mode="full"]');
+  await f.waitForTimeout(400); }
 ok('app still loads rather than crashing', await f.isVisible('#setup'));
 ok('warns that nothing will save', await f.isVisible('#noStore'));
 const w=await f.textContent('#noStore');
@@ -45,6 +49,8 @@ const p2=await ctx.newPage();
 p2.on('pageerror',e=>{console.log('  💥 PAGE ERROR:',e.message);fails++;});
 await p2.goto('http://localhost:8090/inner'); await p2.waitForTimeout(500); await openAll(p2);
 ok('no warning when storage works', !(await p2.isVisible('#noStore')));
+if (await p2.isVisible('#welcome')){ await p2.click('#wPick button[data-mode="full"]');
+  await p2.waitForTimeout(400); }
 await p2.fill('#sRate','38'); await p2.fill('#sAnchor','2026-07-26');
 await p2.click('#sSave'); await p2.waitForTimeout(400);
 await p2.reload(); await p2.waitForTimeout(500); await openAll(p2);

@@ -72,6 +72,10 @@ for (const i of man.icons) {
 }
 
 console.log('\nFirst run asks for your numbers');
+/* First run stops at the welcome screen now — Lite or Full. This suite exercises the
+   full setup form, so take the Full path through it. */
+if (await p.isVisible('#welcome')){ await p.click('#wPick button[data-mode="full"]');
+  await p.waitForTimeout(400); }
 ok('setup screen shows', await p.isVisible('#setup'));
 ok('clock is hidden until set up', !(await p.isVisible('#hero')));
 ok('no wage baked into the file', !readFileSync(ROOT+'/index.html','utf8').includes('38.00,'), '');

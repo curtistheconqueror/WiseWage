@@ -134,6 +134,10 @@ await p.close();
 
 console.log('\n━━ First-run setup asks it, and it is optional ━━');
 p = await boot(undefined, NOW);
+/* First run stops at the welcome screen now — Lite or Full. This suite exercises the
+   full setup form, so take the Full path through it. */
+if (await p.isVisible('#welcome')){ await p.click('#wPick button[data-mode="full"]');
+  await p.waitForTimeout(400); }
 ok('setup is showing', await seen(p, '#setup'));
 ok('and asks what kind of work', await seen(p, '#sProf'));
 const opts = await p.$$eval('#sProf option', os => os.map(o => o.value));
@@ -156,6 +160,8 @@ await p.close();
 
 console.log('\n━━ Declining it changes nothing ━━');
 p = await boot(undefined, NOW);
+if (await p.isVisible('#welcome')){ await p.click('#wPick button[data-mode="full"]');
+  await p.waitForTimeout(400); }
 await p.fill('#sRate', '30'); await p.fill('#sAnchor', '2026-08-09');
 await p.click('#sSave'); await p.waitForTimeout(800);
 d = await st(p);

@@ -63,6 +63,10 @@ const openCfg = async p => { await p.evaluate(() =>
 
 console.log('\n━━ Nothing is assumed about any allowance ━━');
 let p = await boot(undefined, NOW);                 // a genuinely fresh install
+/* First run stops at the welcome screen now — Lite or Full. This suite exercises the
+   full setup form, so take the Full path through it. */
+if (await p.isVisible('#welcome')){ await p.click('#wPick button[data-mode="full"]');
+  await p.waitForTimeout(400); }
 ok('setup is showing', await p.isVisible('#setup'));
 /* The app used to hand everybody five sick days and five Pace "vacation random days".
    Neither number came from anywhere, and an invented allowance reads as a fact somebody

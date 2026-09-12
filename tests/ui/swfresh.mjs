@@ -79,7 +79,10 @@ await p.reload(); await p.waitForTimeout(900);
 ok('the app still loads with no signal', (await p.title()).length > 0, await p.title());
 ok('and it is the newest build, not a stale copy',
    (await p.title()).includes('BUILD-CHARLIE'), await p.title());
-ok('the page really rendered, not an error', await p.isVisible('#punch') || await p.isVisible('#setup'));
+/* Any of the three real first frames counts: the clock, the setup form, or the welcome
+   screen an unconfigured copy now opens on. The point is that something rendered. */
+ok('the page really rendered, not an error',
+   await p.isVisible('#punch') || await p.isVisible('#setup') || await p.isVisible('#welcome'));
 await ctx.setOffline(false);
 
 console.log('\n━━ Back online, a later deploy still arrives ━━');

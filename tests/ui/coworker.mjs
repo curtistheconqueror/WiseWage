@@ -30,6 +30,10 @@ await p.goto('http://localhost:8081/'); await p.waitForTimeout(500); await openA
 const T=s=>p.textContent(s), N=async s=>parseFloat((await T(s)).replace(/[$,]/g,''));
 
 console.log('\n━━ A coworker opens it for the first time ━━');
+/* First run stops at the welcome screen now — Lite or Full. This suite exercises the
+   full setup form, so take the Full path through it. */
+if (await p.isVisible('#welcome')){ await p.click('#wPick button[data-mode="full"]');
+  await p.waitForTimeout(400); }
 ok('greeted by setup, not your data', await p.isVisible('#setup'));
 ok('no clock, no shifts, nothing of yours', !(await p.isVisible('#hero')));
 await p.fill('#sRate','29.50');                       // their pay, not yours

@@ -79,9 +79,11 @@ ok('and the vacation rides along inside cfg',
 console.log('\nRestoring into a completely fresh copy');
 await p.close();
 p = await boot(null);                       // nothing stored — first run
-ok('fresh copy starts at setup', await p.isVisible('#setup'));
+/* First run now opens on the welcome screen — Lite or Full — and setup comes after it. */
+ok('fresh copy starts at the welcome screen', await p.isVisible('#welcome'));
 await p.setInputFiles('#restoreFile', file); await p.waitForTimeout(500);
-ok('setup is gone after restore', !(await p.isVisible('#setup')));
+ok('the welcome screen is gone after restore', !(await p.isVisible('#welcome')));
+ok('and so is setup', !(await p.isVisible('#setup')));
 ok('rate restored', (await p.textContent('#liveline')).includes('$38.00'), await p.textContent('#liveline'));
 ok('period restored', (await p.textContent('#prange')).includes('Sun Jul 26'), await p.textContent('#prange'));
 ok('payday restored', (await p.textContent('#payday')).includes('Fri Aug 21'), await p.textContent('#payday'));
@@ -103,24 +105,32 @@ ok('vacation restored', (await p.evaluate(()=>(state.cfg.vacations||[]).length))
 console.log('\n━━ Somebody moving in from another phone can reach restore ━━');
 await p.close();
 p = await boot(null);
-ok('a fresh copy opens at setup', await p.isVisible('#setup'));
-ok('and offers restore right there', await p.isVisible('#sRestore'));
+/* The very first screen is now the welcome screen, so that is where the route has to be.
+   Putting it only on setup would have re-created the exact problem this section was written
+   for: a screen in front of restore that has to be answered before restore can be found. */
+ok('a fresh copy opens at the welcome screen', await p.isVisible('#welcome'));
+ok('and offers restore right there', await p.isVisible('#wRestore'));
 {
-  const txt = await p.textContent('#setupRestore');
-  ok('worded for moving, not for setting up', /moved|another phone|address/i.test(txt), txt);
+  const txt = await p.textContent('#welcomeRestore');
+  ok('worded for moving, not for setting up',
+     /already using|another|moved|phone/i.test(txt), txt);
 }
 {
   /* The input sits outside every section on purpose. Were it still inside #cfg, this click
      would reach a display:none ancestor and no picker would open — silently, on a phone. */
   const chooser = await Promise.all([
     p.waitForEvent('filechooser', {timeout:4000}),
-    p.click('#sRestore'),
+    p.click('#wRestore'),
   ]).then(r=>r[0]).catch(()=>null);
   ok('tapping it opens a file picker', !!chooser);
   if (chooser) await chooser.setFiles(file);
   await p.waitForTimeout(600); await openAll(p);
 }
-ok('setup gives way to the app', !(await p.isVisible('#setup')));
+ok('the welcome screen gives way to the app', !(await p.isVisible('#welcome')));
+ok('without stopping at setup', !(await p.isVisible('#setup')));
+/* A backup written before Lite existed carries no mode. Such a person had the whole app
+   and must get the whole app back — restoring must never quietly hide their cards. */
+ok('an older backup comes back as Full', await p.evaluate(()=>appMode()==='full'));
 ok('the history came across', (await p.locator('#logBody tbody tr[data-row]').count())===2,
    String(await p.locator('#logBody tbody tr[data-row]').count()));
 ok('at the right rate', (await p.textContent('#liveline')).includes('$38.00'), await p.textContent('#liveline'));

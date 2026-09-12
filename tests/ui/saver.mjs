@@ -1,5 +1,11 @@
-/* WiseWage Lite. One switch, not a second app: everything that costs battery without
-   changing a number is cut by a single class, and every figure stays exactly what it was. */
+/* Battery saver. One switch, not a second app: everything that costs battery without
+   changing a number is cut by a single class, and every figure stays exactly what it was.
+
+   This setting used to be called Lite, and its class was body.lite. That word now means the
+   other thing entirely — how much of the app you see — so the class is body.saver and this
+   file is named for what it tests. The stored value is still the string 'lite', which is why
+   every selectOption below still passes it: renaming what people read must not invalidate
+   what they saved. */
 import { chromium } from 'playwright';
 import http from 'node:http'; import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -65,7 +71,7 @@ console.log('\n━━ Lite cuts everything that costs battery ━━');
 const beforeMoney = await money1();
 await p.selectOption('#tPerf', 'lite'); await p.waitForTimeout(500);
 const c = await cls();
-ok('the lite class is on', /\blite\b/.test(c), c);
+ok('the saver class is on', /\bsaver\b/.test(c), c);
 ok('water is off', !/\bwater\b/.test(c), c);
 ok('and so is the colour cycling', !/rgb-/.test(c), c);
 const fx = await p.evaluate(() => {
@@ -81,7 +87,7 @@ ok('no card shadow', fx.shadow === 'none', fx.shadow);
 console.log('\n━━ The money is untouched ━━');
 await p.clock.fastForward(60 * 1000); await p.waitForTimeout(600);
 const afterMoney = await money1();
-ok('the clock still ticks in lite', afterMoney !== beforeMoney,
+ok('the clock still ticks in battery saver', afterMoney !== beforeMoney,
    beforeMoney + ' → ' + afterMoney);
 /* A minute at $37.78 is 63 cents — the figures move exactly as they always did. */
 const delta = parseFloat(afterMoney.replace(/[$,]/g,'')) - parseFloat(beforeMoney.replace(/[$,]/g,''));
@@ -93,7 +99,7 @@ await p.selectOption('#tPerf', ''); await p.waitForTimeout(500);
 const back = await cls();
 ok('water returns', /\bwater\b/.test(back), back);
 ok('the wave returns', /rgb-wave/.test(back), back);
-ok('lite is gone', !/\blite\b/.test(back), back);
+ok('battery saver is gone', !/\bsaver\b/.test(back), back);
 ok('because the choices underneath were kept, not overwritten',
    await p.evaluate(() => { const t = JSON.parse(localStorage.getItem('payclock.v1')).theme;
      return t.surface === 'water' && t.rgb === 'wave'; }));
@@ -103,7 +109,7 @@ await openCfg();
 await p.selectOption('#tPerf', 'lite'); await p.waitForTimeout(400);
 await p.evaluate(() => { const b = document.querySelector('#presets button'); if (b) b.click(); });
 await p.waitForTimeout(500);
-ok('lite survives tapping a colour preset', /\blite\b/.test(await cls()), await cls());
+ok('battery saver survives tapping a colour preset', /\bsaver\b/.test(await cls()), await cls());
 ok('and is still stored', await p.evaluate(() =>
    JSON.parse(localStorage.getItem('payclock.v1')).theme.perf === 'lite'));
 await p.evaluate(() => { theme().surface='water'; theme().rgb='wave'; theme().perf='';
@@ -114,7 +120,7 @@ console.log('\n━━ It survives a reload ━━');
 await openCfg();
 await p.selectOption('#tPerf', 'lite'); await p.waitForTimeout(500);
 await p.reload(); await p.waitForTimeout(900);
-ok('still lite after a reload', /\blite\b/.test(await cls()), await cls());
+ok('still in battery saver after a reload', /\bsaver\b/.test(await cls()), await cls());
 await openCfg();
 ok('and the control says so', (await p.inputValue('#tPerf')) === 'lite');
 const m = await p.evaluate(() => ({ w:document.documentElement.scrollWidth, win:innerWidth }));

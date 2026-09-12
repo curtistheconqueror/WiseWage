@@ -363,14 +363,53 @@
   .paymode button{cursor:pointer;font-family:inherit;background:transparent;color:var(--muted);border:0;
     padding:7px 16px;font-size:11.6px;font-weight:800;letter-spacing:1.6px;transition:.2s}
   .paymode button.on{color:#05080f;background:linear-gradient(180deg,var(--ok),#2eb968)}
-  /* Lite: no animation, no blur, no shadow — nothing the compositor has to keep alive.
-     One class, so there is exactly one place for it to be wrong. */
-  body.lite *, body.lite *::before, body.lite *::after{
+  /* Battery saver: no animation, no blur, no shadow — nothing the compositor has to keep
+     alive. One class, so there is exactly one place for it to be wrong.
+
+     This used to be called "Lite" and its class was body.lite. The word now means the other
+     thing entirely — how much of the app you see — and two unrelated Lites in one app is
+     exactly the confusion this release set out to remove. The stored setting is still the
+     string 'lite' so nobody's saved preference breaks; only the name people read changed. */
+  body.saver *, body.saver *::before, body.saver *::after{
     animation:none!important;transition:none!important;
     backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
-  body.lite .card{box-shadow:none!important}
+  body.saver .card{box-shadow:none!important}
   #ote input{min-height:44px}
-  body.lite .card::before, body.lite .card::after{display:none!important}
+  body.saver .card::before, body.saver .card::after{display:none!important}
+
+  /* ---- Lite: how much of the app you see ----------------------------------------
+     One class hides everything that is not the answer to "am I on the clock, and what
+     have I made". Nothing is deleted and no figure changes — the engine runs exactly as
+     it does in Full, so switching back shows a complete history rather than a gap. That
+     is the whole reason this is a class over one app and not a second, smaller app. */
+  body.lite .fullonly{display:none!important}
+  /* The clock card's own extras. The running monthly total is a fourth span of the same
+     money stacked under three others, and the note explaining why the clock disagrees with
+     Today only earns its place once someone has noticed the disagreement. In Lite the
+     question has not come up yet, and pre-answering it is what made this card look hard. */
+  body.lite #monmoney, body.lite #monmoneyLbl{display:none!important}
+  body.lite .helpnote{display:none!important}
+
+  /* ---- the welcome screen ---- */
+  #welcome{text-align:center;padding:34px 20px 26px}
+  #welcome .wmark{width:96px;height:96px;border-radius:22px;display:block;margin:0 auto 18px;
+    box-shadow:0 10px 30px rgba(0,0,0,.34)}
+  #welcome h1{font-size:27px;font-weight:800;letter-spacing:-.4px;margin:0 0 6px}
+  #welcome .wlead{color:var(--muted);font-size:13.6px;line-height:1.55;margin:0 auto 22px;max-width:330px}
+  .wpick{display:grid;gap:12px;text-align:left;max-width:420px;margin:0 auto}
+  .wpick button{cursor:pointer;font-family:inherit;text-align:left;padding:16px 17px;border-radius:15px;
+    border:1px solid var(--line);background:rgba(10,16,32,.5);color:var(--fg);min-height:44px}
+  .wpick button b{display:block;font-size:15.5px;font-weight:800;margin-bottom:5px}
+  .wpick button span{display:block;color:var(--muted);font-size:12.8px;line-height:1.55}
+  .wpick button.rec{border-color:var(--ok);
+    background:linear-gradient(180deg,rgba(81,224,138,.15),rgba(81,224,138,.03))}
+  .wpick .wtag{display:inline-block;font-size:10.4px;font-weight:800;letter-spacing:1.3px;
+    text-transform:uppercase;color:var(--ok);margin-bottom:7px}
+  #welcome .wfoot{margin-top:20px;color:var(--muted);font-size:12.2px;line-height:1.6}
+  /* .confirm is red by default because it normally guards something destructive. Restoring
+     a backup is the opposite — it is the good path for someone moving phones — and a red
+     box on the first screen reads as an error before it is read as an offer. */
+  #welcomeRestore, #setupRestore{border-color:var(--line);background:rgba(10,16,32,.5)}
   .bankdot.carried{opacity:.55;border-style:dashed}
   .forgot{margin:12px 0 4px;padding:12px 14px;border-radius:14px;
     background:color-mix(in srgb,var(--warn,#e8a33d) 14%,transparent);
@@ -1019,15 +1058,63 @@
     downloaded copy, and everything sticks.</span>
   </div>
 
-  <header>
+  <!-- Hidden on the welcome screen, which carries its own mark and its own sentence. Two
+       headings saying the same thing in different words is the first impression this
+       release exists to fix. -->
+  <header id="appHead">
     <h1>WiseWage</h1>
     <div class="sub"><span class="was">Pay Clock</span> · Clock in and watch it earn — second by second, straight time into overtime.</div>
   </header>
 
   <!-- ================= FIRST RUN ================= -->
+  <!-- ================= WELCOME =================
+       The first thing a new person sees, and until now there was no such thing: the app
+       opened straight into thirteen questions about overtime rules, holiday presets and
+       stipends. That is a fair description of what this app can do and a terrible first
+       impression of what it is for.
+
+       So: the mark, one sentence, and a single choice that decides how much app you get.
+       The choice is not permanent and says so — the most common reason people bounce off a
+       setup screen is fear of picking wrong. -->
+  <section class="card hide" id="welcome">
+    <!-- The same drawing as the home-screen icon, inlined rather than fetched: this screen
+         is the one most likely to be seen before the icons are cached, and a broken image
+         where the logo goes is a bad first frame. Kept in sync by tools/icon.mjs. -->
+    <svg class="wmark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="WiseWage">
+      <rect width="100" height="100" fill="#ffffff"/>
+      <g transform="translate(66.8,57) scale(0.6) translate(-50,-50)"><path d="M 2,16 L 24,16 L 36,66 L 46,32 L 54,32 L 64,66 L 76,16 L 98,16 L 72,84 L 60,84 L 50,54 L 40,84 L 28,84 Z" fill="#12823f" stroke-linejoin="miter" stroke-miterlimit="8"/></g>
+      <g transform="translate(33.2,43) scale(0.6) translate(-50,-50)"><path d="M 2,16 L 24,16 L 36,66 L 46,32 L 54,32 L 64,66 L 76,16 L 98,16 L 72,84 L 60,84 L 50,54 L 40,84 L 28,84 Z" fill="#ffffff" stroke="#ffffff" stroke-width="5" stroke-linejoin="miter" stroke-miterlimit="8"/><path d="M 2,16 L 24,16 L 36,66 L 46,32 L 54,32 L 64,66 L 76,16 L 98,16 L 72,84 L 60,84 L 50,54 L 40,84 L 28,84 Z" fill="#12823f" stroke-linejoin="miter" stroke-miterlimit="8"/></g>
+    </svg>
+    <h1>WiseWage</h1>
+    <p class="wlead">Clock in and watch your pay add up, second by second — straight time
+    into overtime. Everything stays on this phone.</p>
+    <div class="wpick" id="wPick">
+      <button data-mode="lite" class="rec">
+        <span class="wtag">Start here</span>
+        <b>Lite</b>
+        <span>Three questions and you are tracking. The clock, what you have earned, your
+        pay period and your shifts — nothing else on screen.</span>
+      </button>
+      <button data-mode="full">
+        <b>Full</b>
+        <span>Everything: contract terms, paid holidays, days off, year to date, overtime
+        outlook, production work and printable time sheets. More setup up front.</span>
+      </button>
+    </div>
+    <div class="wfoot">You can switch between the two whenever you like, in Settings.
+    Nothing is lost either way — Lite only shows less, it never records less.</div>
+    <!-- Somebody arriving with a backup is not choosing a mode, they are moving in. This has
+         to be reachable from the very first screen, because restore lives in Settings and
+         Settings does not exist until setup is finished. -->
+    <div class="confirm" id="welcomeRestore" style="margin-top:18px">
+      <span>Already using WiseWage somewhere else?</span>
+      <button class="mini" id="wRestore">⇧ Restore from a backup</button>
+    </div>
+  </section>
+
   <section class="card hide" id="setup">
     <h2>Set up your clock</h2>
-    <p class="slead">Two minutes now and it runs itself from here. Everything stays in this browser — nothing is sent anywhere.</p>
+    <p class="slead" id="setupLead">Two minutes now and it runs itself from here. Everything stays in this browser — nothing is sent anywhere.</p>
     <!-- Somebody arriving with a backup is not setting up, they are moving in. Because everything
          lives in this browser, changing phone or address looks exactly like a first run, and the
          restore button lives in settings, which is hidden until setup is finished. Without this
@@ -1040,7 +1127,7 @@
     <div class="sgrid">
       <!-- Asked first because it sets sensible answers to several questions below. Optional:
            skipping it leaves every default exactly as it was. -->
-      <div class="f"><label for="sProf">What kind of work do you do?</label>
+      <div class="f fullonly"><label for="sProf">What kind of work do you do?</label>
         <select id="sProf"></select></div>
       <div class="f"><label for="sRate">What do you earn per hour?</label>
         <div class="prefixed"><span>$</span><input type="number" id="sRate" min="0" step="0.01" placeholder="0.00" inputmode="decimal"></div></div>
@@ -1048,7 +1135,7 @@
         <input type="date" id="sAnchor"></div>
       <div class="f"><label for="sLen">How long is a pay period?</label>
         <select id="sLen"><option value="14">2 weeks</option><option value="7">1 week</option></select></div>
-      <div class="f"><label for="sPay">How long after it ends do you get paid?</label>
+      <div class="f fullonly"><label for="sPay">How long after it ends do you get paid?</label>
         <select id="sPay">
           <option value="6">The Friday right after</option>
           <option value="13" selected>A week after it ends</option>
@@ -1056,7 +1143,11 @@
           <option value="0">Same day it ends</option>
         </select></div>
     </div>
-    <div class="f" style="margin-top:15px">
+    <!-- Full only. Lite takes the first of these — after 40 hours a week, what US payroll
+         normally does — and it is the first thing in Settings if that is not your rule.
+         Six overtime regimes is the correct answer to "how is overtime counted" and the
+         wrong first question to ask someone who has not used the app yet. -->
+    <div class="f fullonly" style="margin-top:15px">
       <label>When does overtime start?</label>
       <div class="schoice" id="sMode">
         <button data-m="weekly" class="on"><b>After 40 hours a week</b><span>Resets every week. What US payroll normally does.</span></button>
@@ -1071,7 +1162,7 @@
     <!-- Only ever shown to the two day-based rules, because it is only ever a question for
          them: under a weekly or pay-period threshold a missed day already costs you, since
          you simply never reach forty. -->
-    <div class="f hide" id="sMakeUpWrap" style="margin-top:15px">
+    <div class="f hide fullonly" id="sMakeUpWrap" style="margin-top:15px">
       <label>If you miss a scheduled day, do you work those hours back first?</label>
       <div class="schoice" id="sMakeUp">
         <button data-mu="1" class="on"><b>Yes — make up the hours first</b>
@@ -1081,16 +1172,16 @@
       </div>
     </div>
 
-    <div class="f" style="margin-top:18px"><label>Which days are you scheduled to work?</label>
+    <div class="f fullonly" style="margin-top:18px"><label>Which days are you scheduled to work?</label>
       <div class="note">A day you are not scheduled for is treated differently — the whole
       shift counts as extra time rather than just the hours either side of it.</div>
     </div>
-    <div class="autodays" id="sWorkDays" style="justify-content:flex-start">
+    <div class="autodays fullonly" id="sWorkDays" style="justify-content:flex-start">
       <button data-w="0">Sun</button><button data-w="1">Mon</button><button data-w="2">Tue</button>
       <button data-w="3">Wed</button><button data-w="4">Thu</button><button data-w="5">Fri</button>
       <button data-w="6">Sat</button>
     </div>
-    <div class="sgrid" style="margin-top:14px">
+    <div class="sgrid fullonly" style="margin-top:14px">
       <div class="f"><label for="sSchedStart">What time does your shift start?</label>
         <input type="time" id="sSchedStart"></div>
       <div class="f"><label for="sSchedEnd">And when does it end?</label>
@@ -1107,7 +1198,7 @@
          say "the eleven federal ones", which is what the Postal Service and most federal
          employers observe, and no way to say "ours adds Good Friday". A preset sets the list
          and then every one of them can be ticked off individually. -->
-    <div class="f" style="margin-top:18px"><label for="sHolPreset">Which paid holidays does your job give?</label>
+    <div class="f fullonly" style="margin-top:18px"><label for="sHolPreset">Which paid holidays does your job give?</label>
       <div class="note">Start from a set, then tick to match your contract exactly. Everything
       here is editable in Settings later, and you can add any holiday this list does not name.</div>
       <select id="sHolPreset">
@@ -1116,22 +1207,22 @@
         <option value="none">None</option>
       </select>
     </div>
-    <div class="holpick" id="sHolPick"></div>
+    <div class="holpick fullonly" id="sHolPick"></div>
 
     <!-- Allowances used to be two hardcoded rows — floating/personal and sick — with five
          sick days pre-filled. Nobody was asked; they were told. Now nothing exists until it
          is added, and it is named by the person who has it. -->
-    <div class="f" style="margin-top:18px"><label>Paid days off you are given each year</label>
+    <div class="f fullonly" style="margin-top:18px"><label>Paid days off you are given each year</label>
       <div class="note">Days you spend rather than days that arrive — sick days, personal days,
       floating holidays, whatever your contract calls them. Add only what you actually get. If
       your job gives something with a name of its own, add it and rename it: a Pace bus operator
       would add a <i>vacation random day</i>, and it would say so on their screen.</div>
     </div>
-    <div id="sBankList"></div>
-    <div class="actions" style="justify-content:flex-start;margin-top:8px">
+    <div id="sBankList" class="fullonly"></div>
+    <div class="actions fullonly" style="justify-content:flex-start;margin-top:8px">
       <select id="sBankAdd" style="max-width:240px"></select>
     </div>
-    <div class="sgrid" style="margin-top:12px">
+    <div class="sgrid fullonly" style="margin-top:12px">
       <div class="f"><label for="sOffHours">Hours each one is worth</label>
         <input type="number" id="sOffHours" min="0" max="24" step="0.5" value="8"></div>
     </div>
@@ -1154,7 +1245,7 @@
   <!-- Salary under contract. Ten months worked, twelve months paid — so during the school
        year the district is holding money that has already been earned, and that balance is
        what the summer cheques are. No payslip shows it. -->
-  <section class="card col hide" id="salary">
+  <section class="card col hide fullonly" id="salary">
     <h2>My contract <span class="colsum" id="sum_salary"></span></h2>
     <div class="colbody">
       <div class="tgrid">
@@ -1184,7 +1275,7 @@
     </div>
   </section>
 
-  <section class="card col hide" id="units">
+  <section class="card col hide fullonly" id="units">
     <h2>Production <span class="colsum" id="sum_units"></span></h2>
     <div class="colbody">
       <div class="tgrid">
@@ -1288,7 +1379,10 @@
       <span id="makeUpTxt"></span>
     </div>
     <div class="backrow" id="backrow">
-      <button class="mini" id="backOpen">⏱ Already started earlier?</button>
+      <!-- "Already started earlier?" described the fix rather than the problem, so the
+           person it is for — who forgot to punch in and is looking for a way out — had to
+           work out that it applied to them. Name the mistake instead. -->
+      <button class="mini" id="backOpen">⏱ Missed your clock in?</button>
       <button class="mini hide" id="resumeOpen">↩ Clocked out by accident?</button>
     </div>
     <div class="confirm hide" id="resumeConfirm" style="border-color:var(--acc)">
@@ -1318,12 +1412,16 @@
       </div>
     </div>
 
-    <div class="planrow">
+    <!-- Full only. Scheduling a punch in advance, capping a shift automatically and
+         pricing a hypothetical are three things you go looking for once the app is part of
+         your day. On a first Lite screen they are three more controls between someone and
+         the button that says Clock In. -->
+    <div class="planrow fullonly">
       <label class="swrap"><input type="checkbox" id="autoOn"> Auto clock-in at</label>
       <input type="time" id="autoAt">
       <span class="eta" id="autoEta"></span>
     </div>
-    <div class="autodays hide" id="autoDays">
+    <div class="autodays hide fullonly" id="autoDays">
       <span class="adlbl">on</span>
       <button data-d="0">Sun</button><button data-d="1">Mon</button><button data-d="2">Tue</button>
       <button data-d="3">Wed</button><button data-d="4">Thu</button><button data-d="5">Fri</button>
@@ -1340,7 +1438,7 @@
       <button class="mini" id="taxStaleGo">Open deductions</button>
     </div>
 
-    <div class="planrow">
+    <div class="planrow fullonly">
       <label class="swrap"><input type="checkbox" id="planOn"> Auto-stop after</label>
       <input type="number" id="planHrs" min="0.25" max="24" step="0.25" value="8"> <span>hours today</span>
       <span class="eta" id="planEta"></span>
@@ -1349,10 +1447,10 @@
     <!-- The sum you do in your head at the time clock: in at this, out at that, what does
          that come to. Priced through the real ledger, so the overtime is what you would
          actually be paid given the hours already banked — not a guess at 1.5x. -->
-    <button class="charthead" id="wifBtn" aria-expanded="false" aria-controls="wifBody">
+    <button class="charthead fullonly" id="wifBtn" aria-expanded="false" aria-controls="wifBody">
       <span>⚡ What if I work…</span><span class="chev">▾</span>
     </button>
-    <div class="hide" id="wifBody">
+    <div class="hide fullonly" id="wifBody">
       <div class="wifrow">
         <div class="f"><label for="wIn">Clock in</label><input type="time" id="wIn"></div>
         <div class="f"><label for="wOut">Clock out</label><input type="time" id="wOut"></div>
@@ -1473,11 +1571,14 @@
       <div class="tile"><div class="k">Period to date</div><div class="big" id="pGross">$0.00</div>
         <div class="det" id="pDet">0.00 h</div></div>
     </div>
-    <!-- What each month pays, grouped by payday rather than by when the work happened. -->
-    <button class="charthead" id="monBtn" aria-expanded="false" aria-controls="monBody">
+    <!-- What each month pays, grouped by payday rather than by when the work happened.
+         Full only: Lite already answers "what did past periods pay" in the Pay period card,
+         and saying it twice in two shapes is one of the things that made this card hard to
+         read at a glance. -->
+    <button class="charthead fullonly" id="monBtn" aria-expanded="false" aria-controls="monBody">
       <span>📅 By pay month<span class="pastsum" id="monSum"></span></span><span class="chev">▾</span>
     </button>
-    <div class="hide" id="monBody">
+    <div class="hide fullonly" id="monBody">
       <div class="note" style="margin-top:11px">A pay period counts in the month its payday
       falls in — that is when the money arrives. A period worked in July but paid in August
       is August's income.</div>
@@ -1660,7 +1761,7 @@
   </section>
 
   <!-- ================= DECIMAL TIME CONVERSION ================= -->
-  <section class="card col" id="extra">
+  <section class="card col fullonly" id="extra">
     <h2>Decimal Time Conversion <span class="hsub">(OT sheets)</span><span class="colsum" id="sum_extra"></span></h2>
     <div class="colbody">
     <div class="note" style="margin-bottom:12px">What an overtime slip asks for: the time either side of
@@ -1704,7 +1805,7 @@
        For the employer that still wants a signed paper record. Everything on that form
        except the signature is already in the log, so the sheet is generated, not copied
        out by hand. -->
-  <section class="card col" id="sheet">
+  <section class="card col fullonly" id="sheet">
     <h2>Custom data — time sheet<span class="colsum" id="sum_sheet"></span></h2>
     <div class="colbody">
       <div class="note">A daily sign-in sheet, filled in from the log. Punch (or add shifts to
@@ -1829,7 +1930,7 @@
   <!-- OT expectancy: what overtime to expect, and the odds of clearing a yearly target.
        Resampled from this person's own history — below the minimum it refuses to guess,
        because a score that lies is worse than no score. -->
-  <section class="card col" id="ote">
+  <section class="card col fullonly" id="ote">
     <h2>OT outlook <span class="colsum" id="sum_ote"></span></h2>
     <div class="colbody">
       <div id="oReady">
@@ -1949,7 +2050,25 @@
         <span id="cfgUndoTxt"></span>
         <button class="mini" id="cfgUndoBtn">↩ Undo that change</button>
       </div>
-      <details class="cfgsec" id="gJobs">
+      <!-- First group in Settings, and shown in both modes: it is the one setting someone in
+           Lite is most likely to come looking for, and burying the way out of a simplified
+           view is how a simplified view becomes a trap. -->
+      <details class="cfgsec" id="gMode">
+        <summary><span class="cfgt">How much of the app you see</span><span class="cfgsum" id="sumMode"></span></summary>
+        <div class="cfgbody">
+          <div class="f"><label for="cfgMode">Show</label>
+            <select id="cfgMode">
+              <option value="lite">Lite — the clock, earnings, pay period and shifts</option>
+              <option value="full">Full — everything</option>
+            </select>
+            <div class="note" id="modeNote" style="margin-top:8px"></div>
+          </div>
+          <div class="note" style="margin-top:12px">Switching only changes what is on screen.
+          Your shifts, settings and history are the same in both, and nothing stops being
+          recorded in Lite — turn Full on after a year and the whole year is there.</div>
+        </div>
+      </details>
+      <details class="cfgsec fullonly" id="gJobs">
         <summary><span class="cfgt">Jobs</span><span class="cfgsum" id="sumJobs"></span></summary>
         <div class="cfgbody">
       <div class="f" style="margin-top:0"><label>Where you work</label>
@@ -1966,7 +2085,7 @@
       <div class="note" id="jobNote" style="margin-top:10px"></div>
         </div>
       </details>
-      <details class="cfgsec hide" id="gContract">
+      <details class="cfgsec hide fullonly" id="gContract">
         <summary><span class="cfgt">Your contract</span><span class="cfgsum" id="sumContract"></span></summary>
         <div class="cfgbody">
       <div class="f" style="margin-top:0"><label>The salary and the calendar</label>
@@ -1990,7 +2109,7 @@
         </div>
       </details>
 
-      <details class="cfgsec hide" id="gUnits">
+      <details class="cfgsec hide fullonly" id="gUnits">
         <summary><span class="cfgt">Production contract</span><span class="cfgsum" id="sumUnits"></span></summary>
         <div class="cfgbody">
       <div class="f" style="margin-top:0"><label>Base and productivity</label>
@@ -2166,7 +2285,7 @@
       <div class="note" id="cSkewNote" style="margin-top:8px"></div>
         </div>
       </details>
-      <details class="cfgsec" id="gPrem">
+      <details class="cfgsec fullonly" id="gPrem">
         <summary><span class="cfgt">Premiums</span><span class="cfgsum" id="sumPrem"></span></summary>
         <div class="cfgbody">
       <div class="f" style="margin-top:18px"><label for="cNightOn">Shift differential</label>
@@ -2358,8 +2477,9 @@
           </select></div>
         <div class="f"><label for="tPerf">Performance</label>
           <select id="tPerf">
-            <option value="">Full — everything on</option>
-            <option value="lite">Lite — battery saver, instant feel</option>
+            <option value="">Everything on</option>
+            <!-- Value stays 'lite' so saved preferences survive; only the label changed. -->
+            <option value="lite">Battery saver — less motion, instant feel</option>
           </select></div>
         <div class="f"><label for="tRgb">Heading colour</label>
           <select id="tRgb">
@@ -4991,7 +5111,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v79';
+var APP_BUILD = 'v80';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -7260,12 +7380,48 @@ function saveSetup(){
   toast('All set — ' + money(state.cfg.rate) + '/hr. Clock in whenever you like.');
 }
 
-/* Show either the setup screen or the app, never both. */
+/* ============================ how much app you see ============================
+
+   Lite and Full are one app with one engine and one set of numbers. Lite hides sections;
+   it never stops recording, never changes a figure, and never discards what a Full user
+   set up. Someone who starts in Lite, works a year, and switches to Full finds a complete
+   year waiting — not a year of gaps where the hidden features would have collected data.
+
+   That is the whole design constraint, and it is why this is a CSS class over the existing
+   app rather than a second, smaller app: a second app would have to be kept in step, and
+   the day it fell out of step someone's pay would be wrong. */
+function appMode(){ return state.mode === 'lite' ? 'lite' : 'full'; }
+function applyMode(){
+  document.body.classList.toggle('lite', appMode() === 'lite');
+  var sel = el('cfgMode');
+  if (sel && document.activeElement !== sel) sel.value = appMode();
+  var n = el('modeNote');
+  if (n) n.textContent = appMode() === 'lite'
+    ? 'Showing the clock, your earnings, the pay period and your shifts.'
+    : 'Showing everything the app has.';
+}
+
+/* Show the welcome screen, the setup screen, or the app — exactly one of the three. */
 function applyStage(){
   var first = !state.configured;
+  /* Welcome comes before setup and only before the very first setup: it is where Lite or
+     Full gets chosen, and until that is answered there is no way to know which of the two
+     setup screens to draw. Anyone with a mode already stored — including every existing
+     user, who is treated as Full — goes straight past it. */
+  var greet = first && !state.mode;
   syncSheetControls();
-  show('setup', first);
-  ['hero', 'period', 'totals', 'progress', 'log', 'cfg'].forEach(function(id){ show(id, !first); });
+  show('welcome', greet);
+  show('appHead', !greet);
+  show('setup', first && !greet);
+  /* Every card in the app proper, not the six this used to name. The other eight were
+     never hidden during first run, so the welcome and setup screens had Floaters & sick
+     days, Year to date and the calculator sitting underneath them — an empty, meaningless
+     tail on the one screen that has to make sense to someone who has never seen the app.
+     The profession-gated ones are put back under profession control by applyProfession
+     below, and Lite hides its own by class, so showing them here is safe. */
+  ['hero', 'salary', 'units', 'totals', 'period', 'progress', 'log', 'banks',
+   'extra', 'sheet', 'ytd', 'ote', 'calc', 'cfg'].forEach(function(id){ show(id, !first); });
+  applyMode();
   if (first) show('netsetup', false);
   /* Those clock cards are not universal. Work that is counted rather than clocked has no
      punch, no shift log and no progress bar, so hand the decision straight back to the
@@ -7278,6 +7434,18 @@ function applyStage(){
        with the defaults this file happens to ship, so every answer is a real one. */
     if (!el('sSchedStart').value) el('sSchedStart').value = '09:00';
     if (!el('sSchedEnd').value) el('sSchedEnd').value = '17:00';
+    /* Lite does not ask about paid holidays, so Lite must not assume any. The preset ships
+       reading "the six most common", which is a reasonable default for a question someone
+       has answered and an invention for one they were never shown — it would put six paid
+       days into a stranger's year and quietly overstate what they are owed. */
+    if (appMode() === 'lite' && el('sHolPreset').value !== 'none'){
+      el('sHolPreset').value = 'none';
+      setupHolidays = [];
+    }
+    var lead = el('setupLead');
+    if (lead) lead.textContent = appMode() === 'lite'
+      ? 'Three questions and you are tracking. Everything else takes a sensible default you can change later.'
+      : 'Two minutes now and it runs itself from here. Everything stays in this browser — nothing is sent anywhere.';
     paintSetupDays();
     paintSetupHolidays();
     paintSetupBanks();
@@ -8387,14 +8555,17 @@ function applyTheme(){
     body.classList.toggle('rgb-' + m, t.rgb === m);
   });
 
-  /* WiseWage Lite is one switch, not a second app. Everything that costs battery without
+  /* Battery saver is one switch, not a second app. Everything that costs battery without
      changing a number — the water caustics, the colour cycling, the backdrop blurs, every
-     animation — is cut by a single class, and the choices underneath are kept so turning
-     Full back on restores exactly what was picked. The figures themselves are untouched:
-     Lite changes what the GPU does, never what the money says. */
-  var lite = t.perf === 'lite';
-  body.classList.toggle('lite', lite);
-  if (lite){
+     animation — is cut by a single class, and the choices underneath are kept so turning it
+     back off restores exactly what was picked. The figures themselves are untouched: this
+     changes what the GPU does, never what the money says.
+
+     The stored value is still 'lite' from when this feature carried that name; renaming the
+     setting people read must not invalidate the setting people saved. */
+  var saver = t.perf === 'lite' || t.perf === 'saver';
+  body.classList.toggle('saver', saver);
+  if (saver){
     body.classList.remove('water', 'rgb-cycle', 'rgb-wave', 'rgb-pulse');
     body.classList.add('flat');
     body.removeAttribute('data-water');
@@ -9664,12 +9835,24 @@ document.getElementById('jobBar').addEventListener('click', function(e){
   toast('Showing ' + (activeJob().name || 'that job') + '.');
 });
 
+/* ---- Lite or Full ----
+   Nothing is written except the preference itself. A mode switch that also reconfigured
+   something would make going back a different app again, and the promise on the welcome
+   screen is that switching costs nothing. */
+document.getElementById('cfgMode').addEventListener('change', function(e){
+  state.mode = e.target.value === 'lite' ? 'lite' : 'full';
+  save(); applyMode(); applyCols(); render();
+  toast(state.mode === 'lite'
+    ? 'Lite — fewer cards on screen. Everything is still being recorded.'
+    : 'Full — everything is on screen again.');
+});
+
 /* ---- the performance profile ---- */
 document.getElementById('tPerf').addEventListener('change', function(e){
   theme().perf = e.target.value || '';
   save(); applyTheme();
   toast(e.target.value === 'lite'
-    ? 'Lite is on — every figure is the same, the battery just works less.'
+    ? 'Battery saver is on — every figure is the same, the battery just works less.'
     : 'Everything back on.');
 });
 
@@ -10219,6 +10402,15 @@ document.getElementById('restore').onclick = function(){ document.getElementById
 /* Same file input, same restore path — the setup screen only needed a door to it, not a
    second implementation that could drift from the first. */
 document.getElementById('sRestore').onclick = function(){ document.getElementById('restoreFile').click(); };
+document.getElementById('wRestore').onclick = function(){ document.getElementById('restoreFile').click(); };
+
+/* Choosing Lite or Full on the welcome screen. This only records the choice and moves on to
+   setup — it configures nothing, so backing out and picking the other one costs nothing. */
+document.getElementById('wPick').addEventListener('click', function(e){
+  var b = e.target.closest('button[data-mode]'); if (!b) return;
+  state.mode = b.dataset.mode === 'lite' ? 'lite' : 'full';
+  save(); applyStage(); render();
+});
 document.getElementById('restoreFile').onchange = function(e){
   var f = e.target.files && e.target.files[0];
   if (!f) return;
@@ -10378,7 +10570,7 @@ function syncControls(){
    fewest words that are still specific — "$37.78/hr · 1.5× after 40 h" answers the
    question without opening anything. Anything vague enough to need opening anyway
    ("configured", "3 settings") would be worse than an empty summary. */
-var CFG_GROUPS = ['gJobs', 'gContract', 'gUnits', 'gPay', 'gPeriod', 'gSched', 'gPrem',
+var CFG_GROUPS = ['gMode', 'gJobs', 'gContract', 'gUnits', 'gPay', 'gPeriod', 'gSched', 'gPrem',
                   'gOff', 'gLook', 'gData'];
 
 function cfgSummaries(){
@@ -10391,6 +10583,7 @@ function cfgSummaries(){
            : c.otMode === 'eight40'  ? 'after ' + thr + ' h a shift or '
                                        + (c.weeklyThreshold || 40) + ' h a week'
            : 'after ' + thr + ' h a day or ' + (c.periodThreshold || 80) + ' h a period';
+  s.sumMode = appMode() === 'lite' ? 'Lite' : 'Full';
   s.sumPay = money(c.rate || 0) + '/hr · ' + (c.otMultiplier || 1.5) + '× ' + rule;
 
   s.sumPeriod = (c.periodLengthDays || 14) + ' days · paid ' + (c.payDateOffsetDays || 0)

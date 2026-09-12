@@ -50,8 +50,14 @@ const cases = [
 console.log('\n━━ The name is on screen in every state ━━');
 for (const [label, st, qs] of cases){
   const p = await open(st, qs);
-  const h1 = await p.textContent('h1').catch(()=>'');
-  ok(label, (await seen(p,'header')) && h1==='WiseWage', h1 || '(no h1)');
+  /* Either heading counts. A brand new install now opens on the welcome screen, which
+     carries the mark and the name itself and hides the app header so that the two are not
+     on screen saying the same thing in different words. What this suite protects is that
+     the name is visible in every state, not that one particular element is showing it. */
+  const via = (await seen(p,'header')) ? 'header h1'
+            : (await seen(p,'#welcome')) ? '#welcome h1' : null;
+  const h1 = via ? await p.textContent(via).catch(()=>'') : '';
+  ok(label, !!via && h1==='WiseWage', (h1 || '(no h1)') + (via ? ' — via ' + via : ''));
   await p.close();
 }
 

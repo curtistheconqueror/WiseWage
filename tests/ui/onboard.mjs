@@ -31,6 +31,14 @@ async function fresh(ctx, atMs){
   p.on('console',m=>{if(m.type()==='error'){console.log('  CONSOLE ERROR:',m.text());fails++;}});
   await p.clock.install({time:new Date(atMs)});
   await p.goto('http://localhost:8125/'); await p.waitForTimeout(700);
+  /* First run stops at the welcome screen now — Lite or Full — and setup comes after it.
+     This suite is about what the full setup form asks and stores, so every fresh page here
+     takes the Full path through that screen. Done in the helper rather than at each call
+     site: there are six, and one missed would fail thirty assertions down the page with a
+     timeout on a field that is simply not on screen yet. */
+  if (await p.isVisible('#welcome')){
+    await p.click('#wPick button[data-mode="full"]'); await p.waitForTimeout(400);
+  }
   return p;
 }
 const st = p => p.evaluate(()=>JSON.parse(localStorage.getItem('payclock.v1')));
