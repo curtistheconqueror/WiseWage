@@ -6,3 +6,4 @@ node_modules
 tests/ui/*.png
 tests/ui/*.csv
 tests/ui/*.json
+tests/ui/scan.png

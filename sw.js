@@ -7,7 +7,7 @@
    with "a problem repeatedly occurred").
 
    Static assets (icons, manifest) stay cache-first; they effectively never change. */
-const CACHE = 'wisewage-v80';
+const CACHE = 'wisewage-v81';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './apple-touch-icon.png',
                 './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png'];
 

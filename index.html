@@ -390,6 +390,25 @@
   body.lite #monmoney, body.lite #monmoneyLbl{display:none!important}
   body.lite .helpnote{display:none!important}
 
+
+  /* ---- the scan review table ---- */
+  .scantbl{width:100%;border-collapse:collapse;font-size:12.6px;margin-top:10px}
+  .scantbl th{text-align:left;font-size:10.4px;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--muted);font-weight:700;padding:6px 7px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .scantbl td{padding:8px 7px;border-bottom:1px solid var(--line);vertical-align:top;
+    font-variant-numeric:tabular-nums}
+  .scantbl tr.flagged td{background:color-mix(in srgb,var(--warn,#e8a33d) 11%,transparent)}
+  .scantbl tr.newrow td{background:color-mix(in srgb,var(--ok,#51e08a) 9%,transparent)}
+  .scantbl .raw{color:var(--muted);font-size:11px;display:block;margin-top:2px}
+  .scanflag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.05em;
+    padding:2px 6px;border-radius:6px;margin:2px 4px 0 0;
+    background:color-mix(in srgb,var(--warn,#e8a33d) 22%,transparent);color:var(--warn,#e8a33d)}
+  .scanflag.bad{background:color-mix(in srgb,var(--bad,#ff6b6b) 20%,transparent);color:var(--bad,#ff6b6b)}
+  .scanflag.info{background:rgba(255,255,255,.08);color:var(--muted)}
+  .scantbl input[type=checkbox]{width:20px;height:20px}
+  .scandiff{color:var(--warn,#e8a33d);font-weight:700}
+  .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
   /* ---- the welcome screen ---- */
   #welcome{text-align:center;padding:34px 20px 26px}
   #welcome .wmark{width:96px;height:96px;border-radius:22px;display:block;margin:0 auto 18px;
@@ -559,10 +578,17 @@
   .backrow{margin-top:11px}
   .planrow{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:16px;
     border-top:1px solid var(--border);padding-top:16px;color:var(--muted);font-size:13.6px}
-  input[type=number],input[type=text],input[type=date],input[type=time],input[type=datetime-local],select{
+  input[type=number],input[type=text],input[type=date],input[type=time],input[type=datetime-local],
+  input[type=password],select,textarea{
     font-family:inherit;background:rgba(10,16,32,.65);color:var(--ink);border:1px solid var(--border);
     border-radius:9px;padding:8px 10px;font-size:13.6px;font-variant-numeric:tabular-nums}
-  input:focus,select:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 2px rgba(53,208,224,.16)}
+  /* Stamps are read back against the paper character by character, so they are set in a
+     monospace face — a proportional 1 next to a proportional 7 is how a misread survives
+     a proofread. */
+  #scanManual{width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:13px;line-height:1.6;resize:vertical}
+  #scanNotes{width:100%;resize:vertical}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 2px rgba(53,208,224,.16)}
   input[type=number]{width:80px}
   .swrap{display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
   .swrap input{accent-color:var(--acc);width:16px;height:16px;cursor:pointer}
@@ -1024,7 +1050,7 @@
        scroller, but it is the same trap in every form here. 16px on touch only; the
        desktop keeps its smaller type. */
     input[type=number],input[type=text],input[type=date],input[type=time],
-    input[type=datetime-local],select,textarea{min-height:44px;font-size:16px}
+    input[type=datetime-local],input[type=password],select,textarea{min-height:44px;font-size:16px}
     /* A calendar cell is the tap target, and it clears 44px on its own. */
     .calcell input[type=number]{min-height:34px;font-size:16px}
     .swrap input{width:22px;height:22px}
@@ -1805,6 +1831,67 @@
        For the employer that still wants a signed paper record. Everything on that form
        except the signature is already in the log, so the sheet is generated, not copied
        out by hand. -->
+  <!-- ================= SCAN A TIME CARD =================
+       Photograph the punch card, read the stamps, reconcile them against what is
+       already logged. The model reads glyphs and nothing else; every arithmetic
+       decision is made by the engine, and nothing is written until it is approved.
+
+       Full only. It is a reconciliation tool for somebody who already has paper
+       to check against, which is not the person Lite is for. -->
+  <section class="card col fullonly" id="scan">
+    <h2>Scan a time card <span class="colsum" id="sum_scan"></span></h2>
+    <div class="colbody">
+      <div class="note">Photograph your punch card and the stamps are read off it, paired
+      into shifts, and checked against what this app already has. Nothing is saved until
+      you approve it, and one button puts it all back.</div>
+
+      <div class="actions" style="justify-content:flex-start;margin-top:12px">
+        <button class="btn go" id="scanPick">📷 Photograph the card</button>
+        <button class="mini" id="scanTypeToggle">⌨ Type the stamps instead</button>
+      </div>
+      <input type="file" id="scanFile" accept="image/*" capture="environment" class="hide">
+
+      <!-- The operator already knows which row is ambiguous. 500 characters that ride
+           along with the photo is the cheapest accuracy in the whole pipeline. A note may
+           change how something is READ; it can never add a punch that is not on the card. -->
+      <div class="f hide" id="scanNotesWrap" style="margin-top:12px">
+        <label for="scanNotes">Anything odd about this card? (optional)</label>
+        <textarea id="scanNotes" maxlength="500" rows="2"
+          placeholder="e.g. the Sep 8 stamp printed twice — ignore the faint one"></textarea>
+      </div>
+
+      <div class="f hide" id="scanManualWrap" style="margin-top:12px">
+        <label for="scanManual">One stamp per line, exactly as printed</label>
+        <textarea id="scanManual" rows="7" spellcheck="false"
+          placeholder="&apos;26 SEP  6 PM  1:18&#10;26 SEP  7 AM  1:06"></textarea>
+        <div class="actions" style="justify-content:flex-start;margin-top:8px">
+          <button class="btn go" id="scanRead">Read these stamps</button>
+        </div>
+      </div>
+
+      <div class="note hide" id="scanBusy" style="margin-top:12px"></div>
+      <div class="eerr hide" id="scanErr" style="margin-top:12px"></div>
+
+      <div class="hide" id="scanResult" style="margin-top:14px">
+        <div id="scanSummary"></div>
+        <div class="tablewrap"><table class="scantbl" id="scanTbl"></table></div>
+        <div class="note" id="scanLegend" style="margin-top:10px"></div>
+        <div class="actions" style="justify-content:flex-start;margin-top:12px">
+          <button class="btn go" id="scanApply">Apply the ticked rows</button>
+          <button class="btn ghost" id="scanCancel">Discard this scan</button>
+        </div>
+      </div>
+
+      <!-- One scan is one batch: one id prefix, one creation stamp. Putting it back skips
+           anything edited since, because an undo that overwrites real work is worse than
+           no undo at all. -->
+      <div class="confirm hide" id="scanUndoWrap" style="margin-top:12px">
+        <span id="scanUndoTxt"></span>
+        <button class="mini" id="scanUndoBtn">↩ Put that scan back</button>
+      </div>
+    </div>
+  </section>
+
   <section class="card col fullonly" id="sheet">
     <h2>Custom data — time sheet<span class="colsum" id="sum_sheet"></span></h2>
     <div class="colbody">
@@ -2513,6 +2600,28 @@
         <div class="f"><label>Sound</label>
           <select id="cSound"><option value="1">On</option><option value="0">Off</option></select></div>
       </div>
+        </div>
+      </details>
+      <!-- The key for reading a photographed time card. This app has no server, so there
+           is nowhere to keep a shared one: it is your key, it stays on this device, and it
+           is never sent anywhere except to the API that reads your photo. Everything after
+           the reading — pairing, checking, applying — works with no key at all. -->
+      <details class="cfgsec fullonly" id="gScan">
+        <summary><span class="cfgt">Scanning</span><span class="cfgsum" id="sumScan"></span></summary>
+        <div class="cfgbody">
+          <div class="f"><label for="cfgScanKey">Anthropic API key</label>
+            <div class="note">Only needed to read a photo. Typing the stamps by hand needs
+            nothing. WiseWage has no server, so the key is stored on this device and used
+            straight from this page — it is yours and only you can spend it.</div>
+            <input type="password" id="cfgScanKey" autocomplete="off" spellcheck="false"
+              placeholder="sk-ant-..." style="margin-top:8px">
+          </div>
+          <div class="actions" style="justify-content:flex-start;margin-top:10px">
+            <button class="mini" id="cfgScanClear">Forget this key</button>
+          </div>
+          <div class="note" style="margin-top:12px">A photo costs a few cents to read. The
+          photo itself is never stored — only the stamp text it produced, which is kept on
+          every shift as the evidence if a figure is ever disputed.</div>
         </div>
       </details>
       <details class="cfgsec" id="gData">
@@ -4938,6 +5047,638 @@ function sheetBlocks(sessions, periodStartMs, periodDays){
   return blocks;
 }
 
+/* ============================================================================
+   TIME-CARD SCAN ENGINE  —  paste inside the ENGINE fence.
+
+   Turns stamps read off a photographed punch card into validated IN/OUT pairs
+   in epoch milliseconds, and stops there. Everything past a pair is WiseWage's
+   already-tested job: shiftDayMs attributes an overnight shift to the day it
+   started, buildLedger does overtime, periodInfo does pay periods. A second
+   implementation of any of those is the drift that gets a paycheque wrong.
+
+   ES5 only, by the fence's rules: var and function declarations, no const,
+   no let, no arrow functions, no template literals, no destructuring, no
+   spread, no Map/Set, no Object.assign, no Array.prototype.find/includes,
+   no String.prototype.includes/startsWith/padStart, no Number.isFinite.
+   Touches no document, no state, no localStorage — that is what keeps the
+   fence extractable.
+
+   THE RULE THAT GOVERNS ALL OF IT: a misread digit produces a VALID time.
+   1:18 read as 4:18 parses, validates, and passes every format check anybody
+   writes — then silently pays three hours that were never worked. So nothing
+   here guesses. Every doubt comes back as a flag for a person to look at, and
+   the raw stamp text is carried through to the end as the evidence.
+
+   ADD TO THE TEST HARNESS EXPORT LIST:
+     parseStamp, toHour24, stampMs, pairPunches, roundPair, SCAN_FLAGS
+
+   BEFORE PASTING: grep index.html for existing `function parseStamp`,
+   `function pairPunches`, `function stampMs`, `function toHour24` and
+   `function roundPair`. In 11,300 lines a silent redeclaration is a real
+   risk, and ES5 function declarations hoist — the LAST one wins, quietly.
+   ============================================================================ */
+
+/* Two-digit years on a punch card are contemporary. '26 is 2026, not 1926. */
+var SCAN_CENTURY = 2000;
+
+var SCAN_MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+/* Every flag this engine can raise. Strings rather than numbers so a flag that
+   reaches a log or a screen is readable without a lookup table. */
+var SCAN_FLAGS = {
+  ODD_PUNCH_COUNT: "ODD_PUNCH_COUNT",   /* a stream ended on an IN with no OUT */
+  OUT_BEFORE_IN: "OUT_BEFORE_IN",       /* end is not after start */
+  LONG_SHIFT: "LONG_SHIFT",             /* over the max, default 16h */
+  SHORT_SHIFT: "SHORT_SHIFT",           /* under the min, default 5min — a double-stamp */
+  SWALLOWED_DAY: "SWALLOWED_DAY",       /* a whole calendar day inside one pair */
+  ORDER_CORRECTED: "ORDER_CORRECTED",   /* printed order disagreed with the clock */
+  COLUMN_ASSUMED: "COLUMN_ASSUMED",     /* column group was UNKNOWN on the card */
+  UNPARSED: "UNPARSED"                  /* a stamp that could not be read at all */
+};
+
+/* Digits the stamp printer and the camera turn letters into. Used ONLY to
+   repair a month token, and only when the repaired token is one of the twelve.
+   Deliberately narrow: this never touches a number, because a "helpful"
+   correction to a day or a time is exactly the failure this engine exists to
+   prevent. */
+var SCAN_GLYPH_FIX = { "0": "O", "1": "I", "5": "S", "8": "B", "6": "G", "2": "Z" };
+
+function scanIndexOf(list, value) {
+  var i;
+  for (i = 0; i < list.length; i++) { if (list[i] === value) { return i; } }
+  return -1;
+}
+
+function scanIsInt(value) {
+  return typeof value === "number" && isFinite(value) && Math.floor(value) === value;
+}
+
+/* A month token as printed, repaired if one substitution pass lands it on a
+   real month. Returns "" when it does not, so the caller fails loudly. */
+function scanMonthToken(token) {
+  var repaired = "";
+  var i;
+  var ch;
+  if (scanIndexOf(SCAN_MONTHS, token) >= 0) { return token; }
+  for (i = 0; i < token.length; i++) {
+    ch = token.charAt(i);
+    repaired += SCAN_GLYPH_FIX[ch] ? SCAN_GLYPH_FIX[ch] : ch;
+  }
+  if (scanIndexOf(SCAN_MONTHS, repaired) >= 0) { return repaired; }
+  return "";
+}
+
+/* ---------------------------------------------------------------------------
+   parseStamp — one printed punch, read into parts.
+
+   Input is whatever came off the card, e.g.
+
+       "'26 SEP  6 PM  1:18"
+       "26 SEP  7 PM 11:47"      (meridiem glued to the hour)
+       "26 SEP 10 AM 12:07"      (midnight, and the case everyone gets wrong)
+
+   Returns, always with every key present:
+
+     { raw, year, month, day, meridiem, hour, minute, ok, why }
+
+   `hour` is the hour AS PRINTED, 1-12. It is not converted here, because the
+   conversion is the part that goes wrong and it deserves its own tested
+   function — see toHour24. `month` is the three-letter token; `monthIndex` is
+   added as a convenience for stampMs.
+
+   A missing meridiem is a hard failure, never a guess. AM and PM are twelve
+   hours apart and there is no safe default.
+   --------------------------------------------------------------------------- */
+function parseStamp(text) {
+  var out = {
+    raw: typeof text === "string" ? text : "",
+    year: null, month: "", monthIndex: -1, day: null,
+    meridiem: "", hour: null, minute: null,
+    ok: false, why: ""
+  };
+  var work;
+  var tokens;
+  var i;
+  var token;
+  var month = "";
+  var monthAt = -1;
+  var digitsBefore = [];
+  var digitsAfter = [];
+  var timeParts = null;
+  var hour;
+  var minute;
+  var day;
+  var year;
+
+  if (!out.raw) { out.why = "empty stamp"; return out; }
+
+  /* Uppercase, then every separator that is not a colon becomes a space. */
+  work = out.raw.toUpperCase();
+  work = work.replace(/[^A-Z0-9:]+/g, " ");
+  work = work.replace(/\s+/g, " ");
+  work = work.replace(/^\s+|\s+$/g, "");
+  if (!work) { out.why = "nothing readable in stamp"; return out; }
+
+  /* REPAIR THE MONTH BEFORE SPLITTING GLUED RUNS, and not after. The splitter
+     below breaks a letter/digit boundary, which would tear "5EP" into "5 EP"
+     and destroy the very token the repair exists to rescue. Damaged months are
+     exactly the ones that look glued. */
+  tokens = work.split(" ");
+  for (i = 0; i < tokens.length; i++) {
+    if (/^[A-Z0-9]{3}$/.test(tokens[i]) && tokens[i] !== "AM" && tokens[i] !== "PM") {
+      token = scanMonthToken(tokens[i]);
+      if (token) { tokens[i] = token; }
+    }
+  }
+  work = tokens.join(" ");
+
+  /* Now split glued letter/digit runs, which is how the machine prints a
+     meridiem hard against the hour ("PM11:47") and sometimes the year against
+     the month ("26SEP"). */
+  work = work.replace(/([A-Z])(\d)/g, "$1 $2");
+  work = work.replace(/(\d)([A-Z])/g, "$1 $2");
+  work = work.replace(/\s+/g, " ");
+
+  tokens = work.split(" ");
+
+  /* The month anchors everything: the year is printed before it, the day
+     after it. Find it first. */
+  for (i = 0; i < tokens.length; i++) {
+    token = tokens[i];
+    if (/^[A-Z0-9]{3}$/.test(token) && token !== "A" && token !== "P") {
+      if (token === "AM" || token === "PM") { continue; }
+      month = scanMonthToken(token);
+      if (month) { monthAt = i; break; }
+    }
+  }
+  if (!month) { out.why = "no month token"; return out; }
+  out.month = month;
+  out.monthIndex = scanIndexOf(SCAN_MONTHS, month);
+
+  /* Meridiem, and the time, anywhere after the month. */
+  for (i = 0; i < tokens.length; i++) {
+    token = tokens[i];
+    if (token === "AM" || token === "PM") { out.meridiem = token; continue; }
+    if (/^\d{1,2}:\d{2}$/.test(token) && !timeParts) { timeParts = token.split(":"); continue; }
+    if (/^\d{1,4}$/.test(token)) {
+      if (i < monthAt) { digitsBefore.push(token); } else if (i > monthAt) { digitsAfter.push(token); }
+    }
+  }
+
+  if (!out.meridiem) { out.why = "no AM or PM — a stamp without one is twelve hours ambiguous"; return out; }
+  if (!timeParts) { out.why = "no H:MM time"; return out; }
+
+  hour = parseInt(timeParts[0], 10);
+  minute = parseInt(timeParts[1], 10);
+  if (!scanIsInt(hour) || hour < 1 || hour > 12) { out.why = "hour is not 1-12 for an AM/PM stamp"; return out; }
+  if (!scanIsInt(minute) || minute < 0 || minute > 59) { out.why = "minute is not 00-59"; return out; }
+  out.hour = hour;
+  out.minute = minute;
+
+  if (!digitsAfter.length) { out.why = "no day after the month"; return out; }
+  day = parseInt(digitsAfter[0], 10);
+  if (!scanIsInt(day) || day < 1 || day > 31) { out.why = "day is not 1-31"; return out; }
+  out.day = day;
+
+  if (!digitsBefore.length) { out.why = "no year before the month"; return out; }
+  year = parseInt(digitsBefore[digitsBefore.length - 1], 10);
+  if (!scanIsInt(year) || year < 0) { out.why = "year is not a number"; return out; }
+  if (year < 100) { year = SCAN_CENTURY + year; }
+  if (year < 1900 || year > 2999) { out.why = "year is out of range"; return out; }
+  out.year = year;
+
+  out.ok = true;
+  return out;
+}
+
+/* ---------------------------------------------------------------------------
+   toHour24 — the twelve-hour conversion, on its own so it can be tested on its
+   own. The two cases people and models both get backwards:
+
+       AM 12:07  ->  00:07     (midnight, NOT noon)
+       PM 12:07  ->  12:07     (noon, NOT midnight)
+
+   Returns -1 for anything it will not convert, so a caller cannot mistake a
+   failure for midnight.
+   --------------------------------------------------------------------------- */
+function toHour24(hour, meridiem) {
+  var m = typeof meridiem === "string" ? meridiem.toUpperCase() : "";
+  if (!scanIsInt(hour) || hour < 1 || hour > 12) { return -1; }
+  if (m === "AM") { return hour === 12 ? 0 : hour; }
+  if (m === "PM") { return hour === 12 ? 12 : hour + 12; }
+  return -1;
+}
+
+/* ---------------------------------------------------------------------------
+   stampMs — a parsed stamp to epoch milliseconds, DEVICE-LOCAL, matching how
+   WiseWage already stores start/end on a shift.
+
+   Built with the local Date constructor rather than Date.UTC on purpose: a
+   punch card records wall-clock time, so 7:00 AM is 7:00 AM in whatever zone
+   the phone is in, and the constructor applies that day's offset for us.
+
+   The round-trip check below catches a day that does not exist in that month —
+   "SEP 31" would otherwise roll silently into October 1st and pay a day that
+   was never worked. Returns NaN on any failure; callers must test for it.
+   --------------------------------------------------------------------------- */
+function stampMs(parsed) {
+  var hour24;
+  var date;
+  if (!parsed || !parsed.ok) { return NaN; }
+  hour24 = toHour24(parsed.hour, parsed.meridiem);
+  if (hour24 < 0) { return NaN; }
+  date = new Date(parsed.year, parsed.monthIndex, parsed.day, hour24, parsed.minute, 0, 0);
+  if (date.getFullYear() !== parsed.year || date.getMonth() !== parsed.monthIndex || date.getDate() !== parsed.day) {
+    return NaN;
+  }
+  return date.getTime();
+}
+
+/* The local calendar day a moment falls in, as a comparable integer. */
+function scanDayKey(ms) {
+  var d = new Date(ms);
+  return d.getFullYear() * 10000 + d.getMonth() * 100 + d.getDate();
+}
+
+/* How many whole local calendar days sit strictly inside a pair with no punch
+   of their own. Sep 7 in to Sep 10 out swallows the 8th and the 9th, which on
+   a weekly card almost always means a missing punch rather than a 72-hour
+   shift. Capped so a wild timestamp cannot spin here. */
+function scanSwallowedDays(startMs, endMs) {
+  var cursor = new Date(startMs);
+  var endKey = scanDayKey(endMs);
+  var count = 0;
+  var guard = 0;
+  cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), 12, 0, 0, 0);
+  while (guard < 400) {
+    guard++;
+    cursor.setDate(cursor.getDate() + 1);
+    if (scanDayKey(cursor.getTime()) >= endKey) { break; }
+    count++;
+  }
+  return count;
+}
+
+function scanNumberOr(value, fallback) {
+  return (typeof value === "number" && isFinite(value)) ? value : fallback;
+}
+
+/* One punch, normalised out of whatever the caller handed us: either an object
+   already carrying `ms`, or a parseStamp result, or a raw string. */
+function scanNormalisePunch(input, index) {
+  var punch = {
+    index: index,
+    ms: NaN,
+    column: "REGULAR",
+    columnGiven: "",
+    rawText: "",
+    confidence: 1,
+    ok: false,
+    why: ""
+  };
+  var parsed;
+  var column;
+
+  if (input === null || typeof input === "undefined") { punch.why = "missing punch"; return punch; }
+
+  if (typeof input === "string") {
+    parsed = parseStamp(input);
+    punch.rawText = input;
+    punch.ms = stampMs(parsed);
+    punch.why = parsed.why;
+  } else {
+    punch.rawText = typeof input.rawText === "string" ? input.rawText
+      : (typeof input.raw === "string" ? input.raw : "");
+    punch.confidence = scanNumberOr(input.confidence, 1);
+    column = typeof input.columnGroup === "string" ? input.columnGroup.toUpperCase()
+      : (typeof input.column === "string" ? input.column.toUpperCase() : "");
+    punch.columnGiven = column;
+    if (typeof input.ms === "number" && isFinite(input.ms)) {
+      punch.ms = input.ms;
+    } else if (typeof input.ok === "boolean" || typeof input.hour === "number") {
+      punch.ms = stampMs(input.ok ? input : parseStamp(punch.rawText));
+      punch.why = typeof input.why === "string" ? input.why : "";
+    } else {
+      parsed = parseStamp(punch.rawText);
+      punch.ms = stampMs(parsed);
+      punch.why = parsed.why;
+    }
+  }
+
+  punch.ok = typeof punch.ms === "number" && isFinite(punch.ms);
+  if (!punch.ok && !punch.why) { punch.why = "unreadable stamp"; }
+  return punch;
+}
+
+/* ---------------------------------------------------------------------------
+   pairPunches — the whole point of this file.
+
+   Takes the stamps as they appear on the card and returns validated IN/OUT
+   pairs in epoch milliseconds, ready to hand to WiseWage's ledger.
+
+   THE STAMP IS THE TRUTH, NOT THE SLOT IT LANDED IN. The day names down the
+   card and the IN/OUT labels are printed on the blank form; a punch lands
+   wherever the machine was wound to. So pairing is done over SORTED absolute
+   timestamps and is pure arithmetic — no model, no reading, fully testable.
+   Overnight is normal and falls out for free: a pair simply crosses midnight.
+
+   Sorting is right, and it also HIDES a misread, because a wrong meridiem just
+   sorts to a different place. So when sorting changes the order the stamps were
+   printed in, the affected pair gets ORDER_CORRECTED — that disagreement
+   between the paper and the clock is the strongest signal available that a
+   digit or an AM/PM was read wrong.
+
+   EXTRA TIME and REGULAR TIME are separate streams, paired independently. A
+   card with an odd count in one stream leaves its last punch unpaired and flags
+   it rather than inventing an out.
+
+   opts (all optional):
+     maxShiftMs        default 16h   over this, LONG_SHIFT
+     minShiftMs        default 5min  under this, SHORT_SHIFT (a double-stamp)
+     unknownColumn     default "REGULAR" — where an UNKNOWN column group goes
+     presorted         default false — true means "already in clock order,
+                       do not reorder", which is how OUT_BEFORE_IN can fire
+     rounding          see roundPair; omitted means no rounding at all
+
+   Returns:
+     {
+       pairs:    [ { startMs, endMs, flags, confidence, rawText,
+                     startRaw, endRaw, column, ms, rounded } ],
+       unpaired: [ normalised punches with no partner ],
+       flags:    [ { code, column, message } ]
+     }
+
+   Every pair keeps startMs/endMs RAW. Rounding, when asked for, is attached
+   as `.rounded` beside them and never overwrites them.
+   --------------------------------------------------------------------------- */
+function pairPunches(stamps, opts) {
+  var options = opts || {};
+  var maxShiftMs = scanNumberOr(options.maxShiftMs, 16 * 60 * 60 * 1000);
+  var minShiftMs = scanNumberOr(options.minShiftMs, 5 * 60 * 1000);
+  var unknownColumn = typeof options.unknownColumn === "string" ? options.unknownColumn.toUpperCase() : "REGULAR";
+  var presorted = options.presorted === true;
+  var rounding = options.rounding || null;
+  var list = (stamps && stamps.length) ? stamps : [];
+  var result = { pairs: [], unpaired: [], flags: [] };
+  var streams = { REGULAR: [], EXTRA: [] };
+  var names = ["REGULAR", "EXTRA"];
+  var i;
+  var n;
+  var punch;
+  var column;
+  var stream;
+  var a;
+  var b;
+  var pair;
+  var swallowed;
+  var moved;
+
+  for (i = 0; i < list.length; i++) {
+    punch = scanNormalisePunch(list[i], i);
+    column = punch.columnGiven;
+    if (column !== "REGULAR" && column !== "EXTRA") {
+      punch.column = (unknownColumn === "EXTRA") ? "EXTRA" : "REGULAR";
+      punch.columnAssumed = true;
+    } else {
+      punch.column = column;
+      punch.columnAssumed = false;
+    }
+    if (!punch.ok) {
+      result.unpaired.push(punch);
+      result.flags.push({ code: SCAN_FLAGS.UNPARSED, column: punch.column, message: "A stamp could not be read: " + (punch.why || "unreadable") });
+      continue;
+    }
+    streams[punch.column].push(punch);
+  }
+
+  for (n = 0; n < names.length; n++) {
+    stream = streams[names[n]];
+    if (!presorted) {
+      stream.sort(function (left, right) {
+        if (left.ms === right.ms) { return left.index - right.index; }
+        return left.ms - right.ms;
+      });
+    }
+
+    for (i = 0; i + 1 < stream.length; i += 2) {
+      a = stream[i];
+      b = stream[i + 1];
+      pair = {
+        startMs: a.ms,
+        endMs: b.ms,
+        ms: b.ms - a.ms,
+        column: names[n],
+        flags: [],
+        confidence: Math.min(scanNumberOr(a.confidence, 1), scanNumberOr(b.confidence, 1)),
+        rawText: a.rawText && b.rawText ? (a.rawText + " -> " + b.rawText) : (a.rawText || b.rawText || ""),
+        startRaw: a.rawText,
+        endRaw: b.rawText,
+        rounded: null
+      };
+
+      if (pair.endMs <= pair.startMs) { pair.flags.push(SCAN_FLAGS.OUT_BEFORE_IN); }
+      if (pair.ms > maxShiftMs) { pair.flags.push(SCAN_FLAGS.LONG_SHIFT); }
+      if (pair.ms >= 0 && pair.ms < minShiftMs) { pair.flags.push(SCAN_FLAGS.SHORT_SHIFT); }
+
+      swallowed = pair.ms > 0 ? scanSwallowedDays(pair.startMs, pair.endMs) : 0;
+      if (swallowed > 0) { pair.flags.push(SCAN_FLAGS.SWALLOWED_DAY); }
+      pair.swallowedDays = swallowed;
+
+      moved = (b.index < a.index);
+      if (moved) { pair.flags.push(SCAN_FLAGS.ORDER_CORRECTED); }
+
+      if (a.columnAssumed || b.columnAssumed) { pair.flags.push(SCAN_FLAGS.COLUMN_ASSUMED); }
+
+      if (rounding) { pair.rounded = roundPair(pair, rounding); }
+
+      result.pairs.push(pair);
+    }
+
+    if (stream.length % 2 === 1) {
+      result.unpaired.push(stream[stream.length - 1]);
+      result.flags.push({
+        code: SCAN_FLAGS.ODD_PUNCH_COUNT,
+        column: names[n],
+        message: names[n] + " has an odd number of punches — the last one has no partner."
+      });
+    }
+  }
+
+  result.pairs.sort(function (left, right) { return left.startMs - right.startMs; });
+  return result;
+}
+
+/* Round a moment to an increment of LOCAL wall-clock minutes. Done on the
+   local clock rather than on epoch milliseconds because not every zone is a
+   whole number of hours from UTC, and rounding epoch ms would land on the
+   wrong minute in the ones that are not. */
+function scanRoundLocal(ms, incrementMinutes, mode) {
+  var d = new Date(ms);
+  var base = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0).getTime();
+  var minutes = (ms - base) / 60000;
+  var steps = minutes / incrementMinutes;
+  var rounded;
+  if (mode === "up") { rounded = Math.ceil(steps); }
+  else if (mode === "down") { rounded = Math.floor(steps); }
+  else { rounded = Math.round(steps); }
+  return base + rounded * incrementMinutes * 60000;
+}
+
+/* ---------------------------------------------------------------------------
+   roundPair — payroll rounding. GENUINELY NEW: WiseWage's quantize() is the
+   live display ticker, not a pay rule, so there is nothing here to duplicate.
+
+   OPT-IN, and it never overwrites anything. The raw stamps stay exactly as
+   read; this returns a separate object that sits beside them. When somebody
+   disputes a number six weeks later, the unrounded pair and the verbatim stamp
+   text are still there to show them.
+
+   cfg:
+     mode              "none"      nothing (returns null)
+                       "nearest"   each punch to the nearest increment. With
+                                   incrementMinutes 15 this IS the FLSA
+                                   7-minute rule: 1-7 minutes past the quarter
+                                   round back, 8-14 round forward.
+                       "up"        each punch forward to the increment
+                       "down"      each punch back to the increment
+                       "hundredth" leave the punches alone and round the
+                                   DURATION to 1/100 of an hour (36 seconds)
+     incrementMinutes  default 15, used by nearest/up/down
+
+   Returns { mode, startMs, endMs, ms, hours } or null.
+   --------------------------------------------------------------------------- */
+function roundPair(pair, cfg) {
+  var config = cfg || {};
+  var mode = typeof config.mode === "string" ? config.mode : "none";
+  var increment = scanNumberOr(config.incrementMinutes, 15);
+  var startMs;
+  var endMs;
+  var duration;
+
+  if (!pair || mode === "none") { return null; }
+  if (!(typeof pair.startMs === "number" && isFinite(pair.startMs))) { return null; }
+  if (!(typeof pair.endMs === "number" && isFinite(pair.endMs))) { return null; }
+
+  if (mode === "hundredth") {
+    duration = Math.round((pair.endMs - pair.startMs) / 36000) * 36000;
+    return { mode: mode, startMs: pair.startMs, endMs: pair.startMs + duration, ms: duration, hours: duration / 3600000 };
+  }
+
+  if (mode !== "nearest" && mode !== "up" && mode !== "down") { return null; }
+  if (!(increment > 0)) { return null; }
+
+  startMs = scanRoundLocal(pair.startMs, increment, mode);
+  endMs = scanRoundLocal(pair.endMs, increment, mode);
+  duration = endMs - startMs;
+  return { mode: mode, startMs: startMs, endMs: endMs, ms: duration, hours: duration / 3600000 };
+}
+
+
+/* ============================================================================
+   SCAN REVIEW — WiseWage's half of the guard.
+
+   The scan engine above pairs punches by the clock and nothing else, which is
+   correct and is also blind in one specific, expensive way: when a punch does
+   not take, the parity of the whole stream flips, and every pair after it
+   becomes the GAP BETWEEN two shifts wearing a shift's clothes.
+
+   Measured on a real card: drop any one of the eight punches and the hours come
+   out wrong every time, by -18.80h to +1.88h. In four of those eight cases
+   EVERY PAIR COMES BACK WITH NO FLAGS AT ALL. One example, from dropping a
+   single clock-in:
+
+       Tue 22:43 -> Wed 14:02    15.32 h    no flags
+
+   That is the gap between Tuesday's shift and Wednesday's, sold as work. Under
+   sixteen hours, swallows no whole day, so every per-pair rule in the engine
+   passes it. 8.31 invented hours, about $314.
+
+   ODD_PUNCH_COUNT does fire in those cases, but it is a stream-level flag that
+   names a column, while the rows it condemns carry nothing — so a review screen
+   that highlights flagged rows draws the phantom exactly like the real ones.
+
+   The engine cannot fix this: it has no idea what time you start. WiseWage does.
+   A pair beginning at 22:43 is nine hours from a 14:00 roster, and that is the
+   signal. This is the reconcile layer, and it is why the boundary was drawn in
+   the right place rather than being a limitation.
+
+   Pure: reads the pairs and the config, touches no DOM and no state. */
+
+var SCAN_REVIEW_FLAGS = {
+  PARITY_SUSPECT:  'PARITY_SUSPECT',   /* a punch is missing somewhere in this stream */
+  OFF_ROSTER_START:'OFF_ROSTER_START',  /* began nowhere near your scheduled start */
+  NOT_A_WORK_DAY:  'NOT_A_WORK_DAY'     /* a day you are not rostered for */
+};
+
+/* How far a start may drift from the roster before it stops looking like your
+   shift. Two hours is deliberately loose: coming in early or staying for a
+   second run is ordinary, while the parity failure this catches is off by the
+   length of a whole shift. */
+var SCAN_ROSTER_TOLERANCE_MIN = 120;
+
+function scanMinuteOfDay(ms){
+  var d = new Date(ms);
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+/* Adds review flags to a pairPunches() result, in place, and returns it.
+   `cfg` is an ordinary WiseWage config: schedStart/schedEnd as 'HH:MM', workDays
+   as seven booleans. Anything missing simply switches that check off rather than
+   guessing a roster nobody gave us. */
+function scanReview(result, cfg){
+  var out = result || { pairs: [], unpaired: [], flags: [] };
+  var pairs = out.pairs || [];
+  var suspect = {};
+  var schedStart = cfg ? hhmmToMin(cfg.schedStart) : null;
+  var i, j, f, p, mins, diff, dow;
+
+  /* 1. Parity. Nobody can know WHICH punch is missing, so every pair in a
+        stream that ended odd is suspect — not merely the leftover. */
+  for (i = 0; i < (out.flags || []).length; i++) {
+    f = out.flags[i];
+    if (f && f.code === SCAN_FLAGS.ODD_PUNCH_COUNT) { suspect[f.column] = true; }
+  }
+
+  for (i = 0; i < pairs.length; i++) {
+    p = pairs[i];
+    if (!p.flags) { p.flags = []; }
+
+    if (suspect[p.column]) {
+      p.flags.push(SCAN_REVIEW_FLAGS.PARITY_SUSPECT);
+      /* A suspect pair must not read as trustworthy anywhere downstream. */
+      p.confidence = Math.min(typeof p.confidence === 'number' ? p.confidence : 1, 0.4);
+    }
+
+    /* 2. Does it start when you start? */
+    if (schedStart !== null) {
+      mins = scanMinuteOfDay(p.startMs);
+      diff = Math.abs(mins - schedStart);
+      if (diff > 720) { diff = 1440 - diff; }          /* shortest way round the clock */
+      if (diff > SCAN_ROSTER_TOLERANCE_MIN) {
+        p.flags.push(SCAN_REVIEW_FLAGS.OFF_ROSTER_START);
+        p.rosterDriftMin = diff;
+      }
+    }
+
+    /* 3. A day you are not rostered for. Not an error — it is how extra days
+          get worked — but it changes what the hours are worth, so say it. */
+    if (cfg && cfg.workDays) {
+      dow = new Date(shiftDayMs({ start: p.startMs, end: p.endMs }, cfg)).getDay();
+      if (!isWorkDay(cfg, dow)) { p.flags.push(SCAN_REVIEW_FLAGS.NOT_A_WORK_DAY); }
+    }
+  }
+
+  /* Sorted worst-first so a review screen shows the rows that need a person
+     before the rows that do not. */
+  out.needsReview = 0;
+  for (i = 0; i < pairs.length; i++) {
+    for (j = 0; j < pairs[i].flags.length; j++) {
+      if (pairs[i].flags[j] !== SCAN_REVIEW_FLAGS.NOT_A_WORK_DAY) { out.needsReview++; break; }
+    }
+  }
+  return out;
+}
+
 /* ==ENGINE-END== */
 
 /* ============================ help ============================
@@ -5111,7 +5852,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v80';
+var APP_BUILD = 'v81';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -7420,7 +8161,7 @@ function applyStage(){
      The profession-gated ones are put back under profession control by applyProfession
      below, and Lite hides its own by class, so showing them here is safe. */
   ['hero', 'salary', 'units', 'totals', 'period', 'progress', 'log', 'banks',
-   'extra', 'sheet', 'ytd', 'ote', 'calc', 'cfg'].forEach(function(id){ show(id, !first); });
+   'extra', 'scan', 'sheet', 'ytd', 'ote', 'calc', 'cfg'].forEach(function(id){ show(id, !first); });
   applyMode();
   if (first) show('netsetup', false);
   /* Those clock cards are not universal. Work that is counted rather than clocked has no
@@ -7457,7 +8198,7 @@ function applyStage(){
    Every section folds independently; nothing opens anything else. All collapsed by
    default — the header line carries a live summary so a folded section still reads. */
 var COLS = ['hero', 'salary', 'units', 'totals', 'period', 'progress', 'log', 'banks',
-            'extra', 'sheet', 'ytd', 'ote', 'calc'];
+            'extra', 'scan', 'sheet', 'ytd', 'ote', 'calc'];
 function uiOpen(){ return state.ui || (state.ui = { open: {} }); }
 function applyCols(){
   var o = uiOpen().open || {};
@@ -9847,6 +10588,29 @@ document.getElementById('cfgMode').addEventListener('change', function(e){
     : 'Full — everything is on screen again.');
 });
 
+/* ---- the scanning key ---- */
+(function(){
+  var box = document.getElementById('cfgScanKey');
+  if (!box) return;
+  /* Shown as a stub, never in full: a key on screen is a key over somebody's shoulder. */
+  var stub = function(){
+    var k = (state.scanKey || '');
+    box.value = k ? k.slice(0, 7) + '…' + k.slice(-4) : '';
+    box.placeholder = k ? '' : 'sk-ant-...';
+  };
+  stub();
+  box.addEventListener('focus', function(){ if (state.scanKey) box.value = ''; });
+  box.addEventListener('change', function(){
+    var v = (box.value || '').replace(/^\s+|\s+$/g, '');
+    if (!v){ stub(); return; }
+    state.scanKey = v; save(); stub();
+    toast('Key saved on this device.');
+  });
+  document.getElementById('cfgScanClear').onclick = function(){
+    state.scanKey = ''; save(); stub(); toast('Key forgotten.');
+  };
+})();
+
 /* ---- the performance profile ---- */
 document.getElementById('tPerf').addEventListener('change', function(e){
   theme().perf = e.target.value || '';
@@ -10571,7 +11335,7 @@ function syncControls(){
    question without opening anything. Anything vague enough to need opening anyway
    ("configured", "3 settings") would be worse than an empty summary. */
 var CFG_GROUPS = ['gMode', 'gJobs', 'gContract', 'gUnits', 'gPay', 'gPeriod', 'gSched', 'gPrem',
-                  'gOff', 'gLook', 'gData'];
+                  'gOff', 'gLook', 'gScan', 'gData'];
 
 function cfgSummaries(){
   var c = state.cfg, s = {};
@@ -10584,6 +11348,7 @@ function cfgSummaries(){
                                        + (c.weeklyThreshold || 40) + ' h a week'
            : 'after ' + thr + ' h a day or ' + (c.periodThreshold || 80) + ' h a period';
   s.sumMode = appMode() === 'lite' ? 'Lite' : 'Full';
+  s.sumScan = state.scanKey ? 'Photo reading ready' : 'Type stamps, or add a key for photos';
   s.sumPay = money(c.rate || 0) + '/hr · ' + (c.otMultiplier || 1.5) + '× ' + rule;
 
   s.sumPeriod = (c.periodLengthDays || 14) + ' days · paid ' + (c.payDateOffsetDays || 0)
@@ -11256,6 +12021,397 @@ syncControls();
     });
   };
 })();
+
+/* ============================ scan a time card ============================
+
+   Layers, after the architecture this was ported from:
+
+     1  downscale on the phone      a 5 MB photo buys nothing; the model does not
+                                    read the extra pixels, and Claude downscales
+                                    anything over 1568px on the long edge anyway
+     2  read it                     strict JSON, every field required, verbatim
+                                    stamp text carried on every punch
+     3  pair it                     pairPunches() — arithmetic, no model
+     4  reconcile                   scanReview() against the roster, then against
+                                    the shifts already logged
+     5  review                      every row on screen, editable, flagged
+     6  merge                       only on an explicit press
+     7  undo                        one batch, one stamp, skips edited rows
+
+   The model never writes anything. It proposes; the person disposes. */
+
+var scanJob = null;          /* the current proposal, until applied or discarded */
+
+function scanEl(id){ return document.getElementById(id); }
+function scanSay(msg, bad){
+  var b = scanEl('scanBusy'), e = scanEl('scanErr');
+  show('scanBusy', !!msg && !bad); show('scanErr', !!msg && !!bad);
+  if (msg && bad) e.textContent = msg; else if (msg) b.textContent = msg;
+}
+
+/* ---- 1. downscale -------------------------------------------------------
+   A punch stamp is a small dense glyph, so this keeps more resolution than a
+   photo of a form would need — but not more than the model will use. Claude
+   downscales anything over 1568px on the longest edge before it reads it, so
+   sending 3000px is upload time spent on pixels that get thrown away. */
+var SCAN_MAX_EDGE = 1568;
+var SCAN_QUALITY  = 0.82;
+
+function scanDownscale(file, done, fail){
+  var url = URL.createObjectURL(file);
+  var img = new Image();
+  img.onload = function(){
+    try {
+      var w = img.naturalWidth, h = img.naturalHeight;
+      var scale = Math.min(1, SCAN_MAX_EDGE / Math.max(w, h));
+      var cw = Math.round(w * scale), ch = Math.round(h * scale);
+      var cv = document.createElement('canvas');
+      cv.width = cw; cv.height = ch;
+      cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+      var data = cv.toDataURL('image/jpeg', SCAN_QUALITY);
+      done(data.slice(data.indexOf(',') + 1), cw, ch);
+    } catch(e){ fail('That image could not be read.'); }
+    finally { URL.revokeObjectURL(url); }
+  };
+  img.onerror = function(){ URL.revokeObjectURL(url); fail('That file is not an image this browser can open.'); };
+  img.src = url;
+}
+
+/* ---- 2. the instruction -------------------------------------------------
+   Structure: what it is, what to extract, what to ignore, the traps, never
+   invent, then the operator's note. The two rules that carry the most weight
+   are "the stamp's own date and time are the truth" and "never invent". */
+function scanPrompt(notes){
+  var p =
+    'Read the attached photograph of a mechanical punch time card. Extract EVERY stamped ' +
+    'punch you can see, in printed order, top to bottom.\n\n' +
+    'Each stamp carries its own year, month, day, meridiem and time — read those from the ' +
+    'stamp itself. The day names printed down the card (SUNDAY, MONDAY...) and the IN/OUT ' +
+    'labels are part of the blank form, not part of the stamp. Report which slot a stamp ' +
+    'appears in if you can tell, but the stamp\'s own date and time are the truth. Never ' +
+    'correct one to agree with the other, and never reorder.\n\n' +
+    'Read each digit one at a time rather than inferring it from a similar stamp elsewhere ' +
+    'on the card. A misread digit produces a valid-looking time that nobody can catch later. ' +
+    'Set confidence below 0.7 for any stamp you had to interpret rather than read cleanly.\n\n' +
+    'Where the machine printed one stamp on top of another, set overstruck true, put your ' +
+    'best reading in the fields, put what you can see of both in rawText, and lower the ' +
+    'confidence.\n\n' +
+    'Handwritten marks, initials, circled letters and grey R marks are NOT punches. Never ' +
+    'emit them as a time; note them in marking on the nearest stamp.\n\n' +
+    'Never invent a punch. A blank slot is blank. If a stamp is wholly illegible, return it ' +
+    'with confidence 0 and say so in reviewNote rather than leaving it out — a punch you ' +
+    'cannot read still tells the person a punch is there.\n\n' +
+    'Return ONLY JSON, no prose, of the form:\n' +
+    '{"punches":[{"rawText":"\'26 SEP  6 PM  1:18","year":"26","month":"SEP","day":6,' +
+    '"meridiem":"PM","hour":1,"minute":18,"columnGroup":"REGULAR","printedSlot":"IN",' +
+    '"overstruck":false,"handwritten":false,"marking":"","confidence":0.98,"reviewNote":""}]}\n' +
+    'columnGroup is REGULAR, EXTRA or UNKNOWN. meridiem is AM, PM or UNKNOWN. ' +
+    'printedSlot is IN, OUT or "". Every field is required on every punch.';
+  if (notes) {
+    p += '\n\nThe person holding the card added this note. It may change HOW you read ' +
+         'something written on the card. It can NEVER add a punch that is not printed there. ' +
+         'If it contradicts what is clearly printed, follow the card and say so in reviewNote.\n' +
+         'NOTE: ' + notes;
+  }
+  return p;
+}
+
+function scanKey(){ return (state.scanKey || '').replace(/^\s+|\s+$/g, ''); }
+
+function scanCallModel(b64, notes, done, fail){
+  var key = scanKey();
+  if (!key){ fail('NOKEY'); return; }
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      /* Required for a browser to talk to the API directly. The key is the user's
+         own and lives only on this device — there is no server here to hold one. */
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-5',
+      max_tokens: 4000,
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+        { type: 'text', text: scanPrompt(notes) }
+      ]}]
+    })
+  }).then(function(res){
+    return res.json().then(function(body){ return { ok: res.ok, status: res.status, body: body }; });
+  }).then(function(r){
+    if (!r.ok){
+      /* Sentences somebody can act on, not a status code. */
+      var msg = r.status === 401 ? 'That API key was refused. Check it in Settings.'
+              : r.status === 429 ? 'The API is rate limiting. Wait a minute and try again.'
+              : r.status === 400 ? 'The API refused the request. The photo may be too large.'
+              : r.status === 529 || r.status === 503 ? 'The API is busy. Try again shortly.'
+              : 'The API returned an error (' + r.status + ').';
+      if (r.body && r.body.error && r.body.error.message) msg += ' ' + r.body.error.message;
+      fail(msg); return;
+    }
+    var text = '';
+    try { text = r.body.content[0].text; } catch(e){ fail('The reply was not in the expected shape.'); return; }
+    var m = text.match(/\{[\s\S]*\}/);
+    if (!m){ fail('No JSON came back from the read.'); return; }
+    var parsed;
+    try { parsed = JSON.parse(m[0]); } catch(e){ fail('The JSON that came back could not be parsed.'); return; }
+    if (!parsed || !parsed.punches || !parsed.punches.length){ fail('No punches were found on that photo.'); return; }
+    done(parsed.punches);
+  }).catch(function(e){
+    /* A rejected fetch here is not the same as an error FROM the API — the request never
+       arrived. Two things cause it and they need different answers, so say both rather
+       than printing "failed to fetch" and leaving somebody to guess which. */
+    fail('The request never reached the API. Either this device is offline, or the browser '
+       + 'refused the call (some browsers block a page from talking to the API directly). '
+       + 'Typing the stamps still works and produces exactly the same result — everything '
+       + 'after the reading is the same code.');
+  });
+}
+
+/* ---- 3+4. pair, review, and reconcile against what is already logged ---- */
+function scanBuild(punches){
+  var cfg = state.cfg;
+  var res = scanReview(pairPunches(punches, {}), cfg);
+  var existing = jobSessions();
+  var i, j, p, best, bestGap, s, gap;
+  for (i = 0; i < res.pairs.length; i++){
+    p = res.pairs[i];
+    /* Match to a logged shift by nearest start on the same shift-day. A scan is a
+       correction of what is already there far more often than it is new work. */
+    best = null; bestGap = Infinity;
+    for (j = 0; j < existing.length; j++){
+      s = existing[j];
+      if (shiftDayMs(s, cfg) !== shiftDayMs({ start: p.startMs, end: p.endMs }, cfg)) continue;
+      gap = Math.abs(s.start - p.startMs);
+      if (gap < bestGap){ bestGap = gap; best = s; }
+    }
+    p.match = best ? best.id : null;
+    p.matchStart = best ? best.start : null;
+    p.matchEnd = best ? best.end : null;
+    p.deltaMs = best ? ((p.endMs - p.startMs) - (best.end - best.start)) : 0;
+    /* Ticked by default only when it is safe to be: something to change, and
+       nothing about the row that needs a person first. */
+    p.take = !hasRealFlag(p) && (!best || Math.abs(p.deltaMs) > 60000);
+  }
+  return res;
+}
+
+/* NOT_A_WORK_DAY is information, not a doubt — an extra day is a real thing that
+   happens, and it changes what the hours are worth rather than whether to trust them. */
+function hasRealFlag(p){
+  for (var i = 0; i < p.flags.length; i++){
+    if (p.flags[i] !== SCAN_REVIEW_FLAGS.NOT_A_WORK_DAY) return true;
+  }
+  return false;
+}
+
+var SCAN_FLAG_TEXT = {
+  PARITY_SUSPECT:   ['A punch is missing on this card, so every pair after it may be the GAP between two shifts rather than a shift. Check this row against the paper.', 'bad'],
+  OFF_ROSTER_START: ['Starts nowhere near your usual start time.', 'bad'],
+  NOT_A_WORK_DAY:   ['A day you are not scheduled for.', 'info'],
+  ODD_PUNCH_COUNT:  ['Odd number of punches.', 'bad'],
+  OUT_BEFORE_IN:    ['The out is before the in.', 'bad'],
+  LONG_SHIFT:       ['Longer than 16 hours.', 'bad'],
+  SHORT_SHIFT:      ['Under 5 minutes — probably a double stamp.', ''],
+  SWALLOWED_DAY:    ['A whole day sits inside this pair with no punch of its own.', 'bad'],
+  ORDER_CORRECTED:  ['The printed order disagreed with the clock.', ''],
+  COLUMN_ASSUMED:   ['Regular or extra was not clear on the card.', ''],
+  UNPARSED:         ['Could not be read.', 'bad']
+};
+
+function scanRenderReview(){
+  var res = scanJob && scanJob.res;
+  show('scanResult', !!res);
+  if (!res) return;
+  var cfg = state.cfg, rows = '', i, p, hrs, x, seen = {};
+
+  rows += '<thead><tr><th></th><th>Day</th><th>In</th><th>Out</th><th>Hours</th>'
+        + '<th>In the app</th><th>Why it needs a look</th></tr></thead><tbody>';
+  for (i = 0; i < res.pairs.length; i++){
+    p = res.pairs[i];
+    hrs = (p.endMs - p.startMs) / HOUR_MS;
+    var cls = hasRealFlag(p) ? 'flagged' : (p.match ? '' : 'newrow');
+    var was = p.match
+      ? (((p.matchEnd - p.matchStart) / HOUR_MS).toFixed(2) + ' h'
+         + (Math.abs(p.deltaMs) > 60000
+            ? ' <span class="scandiff">' + (p.deltaMs > 0 ? '+' : '') + (p.deltaMs / HOUR_MS).toFixed(2) + '</span>' : ''))
+      : '<span class="raw">not logged</span>';
+    var why = '';
+    for (x = 0; x < p.flags.length; x++){
+      var t = SCAN_FLAG_TEXT[p.flags[x]] || [p.flags[x], ''];
+      why += '<span class="scanflag ' + t[1] + '">' + esc(p.flags[x].replace(/_/g, ' ').toLowerCase()) + '</span>';
+      if (!seen[p.flags[x]]){ seen[p.flags[x]] = t[0]; }
+    }
+    rows += '<tr class="' + cls + '">'
+      + '<td><input type="checkbox" data-scanrow="' + i + '"' + (p.take ? ' checked' : '') + '></td>'
+      + '<td>' + fdate(new Date(shiftDayMs({ start: p.startMs, end: p.endMs }, cfg))) + '</td>'
+      + '<td>' + ptime(p.startMs) + '<span class="raw">' + esc(p.startRaw || '') + '</span></td>'
+      + '<td>' + ptime(p.endMs) + '<span class="raw">' + esc(p.endRaw || '') + '</span></td>'
+      + '<td>' + hrs.toFixed(2) + '</td>'
+      + '<td>' + was + '</td>'
+      + '<td>' + (why || '<span class="raw">reads clean</span>') + '</td></tr>';
+  }
+  rows += '</tbody>';
+  scanEl('scanTbl').innerHTML = rows;
+
+  var legend = '';
+  for (var k in seen){ if (seen.hasOwnProperty(k)) legend += '<b>' + k.replace(/_/g, ' ').toLowerCase() + '</b> — ' + seen[k] + '<br>'; }
+  scanEl('scanLegend').innerHTML = legend;
+
+  var un = res.unpaired.length;
+  scanEl('scanSummary').innerHTML =
+    '<div class="note">' + res.pairs.length + (res.pairs.length === 1 ? ' shift read' : ' shifts read')
+    + (res.needsReview ? ' &nbsp;·&nbsp; <b style="color:var(--warn)">' + res.needsReview + ' need a look</b>' : ' &nbsp;·&nbsp; all read clean')
+    + (un ? ' &nbsp;·&nbsp; <b style="color:var(--bad)">' + un + ' punch' + (un === 1 ? '' : 'es') + ' with no partner</b>' : '')
+    + '</div>';
+}
+
+/* ---- 6. merge. The card wins, but only on the rows you ticked. ---- */
+function scanApply(){
+  var res = scanJob && scanJob.res;
+  if (!res) return;
+  var stamp = Date.now();                 /* one press, one stamp — the batch fingerprint */
+  var batch = 'scan' + stamp.toString(36);
+  var added = 0, changed = 0, i, p, s;
+  var prev = [], addedIds = [];
+  for (i = 0; i < res.pairs.length; i++){
+    p = res.pairs[i];
+    if (!p.take) continue;
+    if (p.match){
+      s = sessionById(p.match);
+      if (!s) continue;
+      prev.push({ id: s.id, start: s.start, end: s.end });
+      s.start = p.startMs; s.end = p.endMs;
+      s.scanBatch = batch; s.scanAt = stamp; s.scanRaw = p.rawText;
+      changed++;
+    } else {
+      var nid = uid();
+      addedIds.push(nid);
+      state.sessions.push({ id: nid, jobId: state.activeJob, start: p.startMs, end: p.endMs,
+                            note: '', scanBatch: batch, scanAt: stamp, scanRaw: p.rawText });
+      added++;
+    }
+  }
+  if (!added && !changed){ toast('Nothing was ticked, so nothing changed.'); return; }
+  /* addedIds and prev are kept apart on purpose. Both kinds of row carry the batch
+     stamp, so a single "delete everything from this batch" sweep would destroy a shift
+     the scan merely CORRECTED — a shift that existed before the scan and belongs to the
+     person, not to the import. An import must never be the way a record leaves. */
+  state.scanUndo = { batch: batch, at: stamp, prev: prev, addedIds: addedIds,
+                     added: added, changed: changed };
+  scanJob = null;
+  save(); show('scanResult', false); renderScanUndo(); render();
+  toast('Applied ' + (added ? added + ' new' : '') + (added && changed ? ' and ' : '')
+        + (changed ? changed + ' corrected' : '') + (added + changed === 1 ? ' shift' : ' shifts') + '.');
+}
+
+function sessionById(id){
+  for (var i = 0; i < state.sessions.length; i++){ if (state.sessions[i].id === id) return state.sessions[i]; }
+  return null;
+}
+
+/* ---- 7. undo. Only what nobody has touched since. ---- */
+function renderScanUndo(){
+  var u = state.scanUndo;
+  show('scanUndoWrap', !!u);
+  if (!u) return;
+  scanEl('scanUndoTxt').textContent =
+    'Last scan: ' + (u.added ? u.added + ' added' : '') + (u.added && u.changed ? ', ' : '')
+    + (u.changed ? u.changed + ' corrected' : '') + ' on ' + fdate(new Date(u.at)) + '.';
+}
+
+function scanUndo(){
+  var u = state.scanUndo;
+  if (!u) return;
+  var kept = 0, put = 0, i, j, s;
+  var addedIds = u.addedIds || [];
+  /* Remove only what this batch CREATED, and only if nobody has edited it since.
+     A corrected shift is restored below instead — never removed. */
+  var keep = [];
+  for (i = 0; i < state.sessions.length; i++){
+    s = state.sessions[i];
+    if (scanIndexOf(addedIds, s.id) >= 0 && s.scanBatch === u.batch && s.scanAt === u.at){
+      if (s.editedAt){ kept++; keep.push(s); continue; }
+      put++; continue;
+    }
+    keep.push(s);
+  }
+  state.sessions = keep;
+  /* Restore what it changed, unless that has been edited since either. */
+  for (j = 0; j < u.prev.length; j++){
+    s = sessionById(u.prev[j].id);
+    if (!s) continue;
+    if (s.editedAt){ kept++; continue; }
+    s.start = u.prev[j].start; s.end = u.prev[j].end;
+    delete s.scanBatch; delete s.scanAt; delete s.scanRaw;
+    put++;
+  }
+  state.scanUndo = null;
+  save(); renderScanUndo(); render();
+  toast('Put back ' + put + (put === 1 ? ' shift' : ' shifts')
+        + (kept ? '. ' + kept + ' you edited since were left alone.' : '.'));
+}
+
+/* ---- wiring ---- */
+(function(){
+  var pick = scanEl('scanPick'); if (!pick) return;
+  pick.onclick = function(){
+    if (!scanKey()){
+      scanSay('Photo reading needs an API key, which goes in Settings → Scanning. ' +
+              'Until then, use “Type the stamps instead” — everything after the reading ' +
+              'works exactly the same.', true);
+      show('scanManualWrap', true);
+      return;
+    }
+    show('scanNotesWrap', true);
+    scanEl('scanFile').click();
+  };
+  scanEl('scanTypeToggle').onclick = function(){
+    var open = scanEl('scanManualWrap').classList.contains('hide');
+    show('scanManualWrap', open);
+    if (open) scanEl('scanManual').focus();
+  };
+  scanEl('scanFile').onchange = function(e){
+    var f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    scanSay('Shrinking the photo…');
+    scanDownscale(f, function(b64){
+      scanSay('Reading the card…');
+      scanCallModel(b64, (scanEl('scanNotes').value || ''), function(punches){
+        scanSay('');
+        scanJob = { res: scanBuild(punches) };
+        scanRenderReview();
+      }, function(msg){
+        scanSay(msg === 'NOKEY' ? 'No API key set — Settings → Scanning.' : msg, true);
+      });
+    }, function(msg){ scanSay(msg, true); });
+  };
+  scanEl('scanRead').onclick = function(){
+    var lines = (scanEl('scanManual').value || '').split('\n');
+    var punches = [], i, t;
+    for (i = 0; i < lines.length; i++){
+      t = lines[i].replace(/^\s+|\s+$/g, '');
+      if (t) punches.push({ rawText: t, columnGroup: 'REGULAR', confidence: 1 });
+    }
+    if (!punches.length){ scanSay('No stamps typed yet.', true); return; }
+    scanSay('');
+    scanJob = { res: scanBuild(punches) };
+    scanRenderReview();
+  };
+  scanEl('scanTbl').addEventListener('change', function(e){
+    var cb = e.target.closest('[data-scanrow]'); if (!cb || !scanJob) return;
+    scanJob.res.pairs[+cb.dataset.scanrow].take = cb.checked;
+  });
+  scanEl('scanApply').onclick = scanApply;
+  scanEl('scanCancel').onclick = function(){ scanJob = null; show('scanResult', false); scanSay(''); };
+  scanEl('scanUndoBtn').onclick = scanUndo;
+  renderScanUndo();
+})();
+
 applyStage();
 render();
 setInterval(render, 120);
