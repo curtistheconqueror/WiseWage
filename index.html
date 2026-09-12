@@ -408,6 +408,10 @@
   .scantbl input[type=checkbox]{width:20px;height:20px}
   .scandiff{color:var(--warn,#e8a33d);font-weight:700}
   .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .scandiag{margin:0;padding:10px 12px;border-radius:10px;background:rgba(10,16,32,.55);
+    border:1px solid var(--line);color:var(--muted);font-size:11.5px;line-height:1.6;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    white-space:pre-wrap;word-break:break-word;max-height:190px;overflow:auto}
 
   /* ---- the welcome screen ---- */
   #welcome{text-align:center;padding:34px 20px 26px}
@@ -1878,6 +1882,16 @@
 
       <div class="note hide" id="scanBusy" style="margin-top:12px"></div>
       <div class="eerr hide" id="scanErr" style="margin-top:12px"></div>
+      <!-- What actually happened, in order, with sizes and timings. A failure described as
+           "it ran a while and said it never reached the API" is three different faults
+           wearing one message; this says which. -->
+      <div class="hide" id="scanDiagWrap" style="margin-top:10px">
+        <div class="note" style="margin-bottom:6px">What happened, step by step</div>
+        <pre class="scandiag" id="scanDiag"></pre>
+        <div class="actions" style="justify-content:flex-start;margin-top:8px">
+          <button class="mini" id="scanDiagCopy">Copy this</button>
+        </div>
+      </div>
 
       <div class="hide" id="scanResult" style="margin-top:14px">
         <div id="scanSummary"></div>
@@ -2623,9 +2637,16 @@
             <input type="password" id="cfgScanKey" autocomplete="off" spellcheck="false"
               placeholder="sk-ant-..." style="margin-top:8px">
           </div>
+          <!-- Everything else in this app saves the moment you change it, and for a rate or
+               a checkbox that is right — the value on screen is the whole truth. A key is
+               different: it can be saved perfectly and still be wrong, and you would not
+               find out until you were standing at the clock with a card in your hand. So
+               this asks the API, and reports what actually came back. -->
           <div class="actions" style="justify-content:flex-start;margin-top:10px">
+            <button class="btn go" id="cfgScanTest">Test this key</button>
             <button class="mini" id="cfgScanClear">Forget this key</button>
           </div>
+          <div class="note" id="cfgScanState" style="margin-top:9px"></div>
           <div class="note" style="margin-top:12px">A photo costs a few cents to read. The
           photo itself is never stored — only the stamp text it produced, which is kept on
           every shift as the evidence if a figure is ever disputed.</div>
@@ -5865,7 +5886,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v82';
+var APP_BUILD = 'v83';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -10620,7 +10641,55 @@ document.getElementById('cfgMode').addEventListener('change', function(e){
     toast('Key saved on this device.');
   });
   document.getElementById('cfgScanClear').onclick = function(){
-    state.scanKey = ''; save(); stub(); toast('Key forgotten.');
+    state.scanKey = ''; save(); stub(); say(''); toast('Key forgotten.');
+  };
+
+  var st = document.getElementById('cfgScanState');
+  function say(msg, kind){
+    st.innerHTML = msg ? '<b style="color:var(--' + (kind || 'muted') + ')">' + esc(msg) + '</b>' : '';
+  }
+
+  /* The smallest real request the API takes. It proves three separate things that all look
+     identical when they go wrong: that a key is stored at all, that the key is accepted,
+     and that this browser is allowed to call the API directly — which is the one thing
+     that could not be tested before shipping, because a browser in a sandbox has no
+     network to test it with. */
+  document.getElementById('cfgScanTest').onclick = function(){
+    /* Take what is in the box if it has not been committed yet. Everything here saves on
+       blur, which is invisible on a phone: paste a key, tap Test, and the tap that moves
+       focus is the same tap that presses the button. Reading the field directly means the
+       obvious sequence works instead of silently testing nothing. */
+    var box = document.getElementById('cfgScanKey');
+    var typed = (box.value || '').replace(/^\s+|\s+$/g, '');
+    if (typed && typed.indexOf('…') < 0){ state.scanKey = typed; save(); stub(); }
+    var key = (state.scanKey || '').replace(/^\s+|\s+$/g, '');
+    if (!key){ say('No key saved yet. Paste one into the box above first.', 'bad'); return; }
+    var btn = this;
+    btn.disabled = true;
+    say('Asking the API…');
+    fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': key,
+                 'anthropic-version': '2023-06-01',
+                 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 4,
+                             messages: [{ role: 'user', content: 'hi' }] })
+    }).then(function(res){
+      btn.disabled = false;
+      if (res.ok){ say('Working. Photo reading is ready.', 'ok'); return; }
+      if (res.status === 401){ say('That key was refused. Check it was copied whole.', 'bad'); return; }
+      if (res.status === 429){ say('The key works, but the API is rate limiting right now.', 'warn'); return; }
+      if (res.status === 400){
+        /* A 400 still proves the key and the route: a refused key never gets this far. */
+        say('The key works — the API reached and answered.', 'ok'); return;
+      }
+      say('The API answered with an error (' + res.status + ').', 'bad');
+    }).catch(function(){
+      btn.disabled = false;
+      say('The request never reached the API. Either this device is offline, or this browser '
+        + 'will not allow the page to call the API directly. Typing the stamps still works '
+        + 'and gives exactly the same result.', 'bad');
+    });
   };
 })();
 
@@ -11361,7 +11430,7 @@ function cfgSummaries(){
                                        + (c.weeklyThreshold || 40) + ' h a week'
            : 'after ' + thr + ' h a day or ' + (c.periodThreshold || 80) + ' h a period';
   s.sumMode = appMode() === 'lite' ? 'Lite' : 'Full';
-  s.sumScan = state.scanKey ? 'Photo reading ready' : 'Type stamps, or add a key for photos';
+  s.sumScan = state.scanKey ? 'Key saved — test it to be sure' : 'Type stamps, or add a key for photos';
   s.sumPay = money(c.rate || 0) + '/hr · ' + (c.otMultiplier || 1.5) + '× ' + rule;
 
   s.sumPeriod = (c.periodLengthDays || 14) + ' days · paid ' + (c.payDateOffsetDays || 0)
@@ -12067,23 +12136,53 @@ function scanSay(msg, bad){
    photo of a form would need — but not more than the model will use. Claude
    downscales anything over 1568px on the longest edge before it reads it, so
    sending 3000px is upload time spent on pixels that get thrown away. */
+/* Claude downscales anything over 1568px on the longest edge before reading it, so sending
+   more than that is upload time spent on pixels that get thrown away — and on a phone the
+   upload is the slow part, not the reading.
+
+   The ladder exists because a first attempt that runs for twenty seconds and dies is worse
+   than a slightly softer image that arrives. Quality drops before size does: resizing first
+   throws away the stroke detail a punch stamp is made of, while quality loss degrades more
+   gently. Only when quality is exhausted does the long edge come down. */
 var SCAN_MAX_EDGE = 1568;
 var SCAN_QUALITY  = 0.82;
+var SCAN_MIN_QUALITY = 0.55;      /* below this a 14px stamp starts losing its digits */
+var SCAN_TARGET_KB = 900;         /* base64, not bytes on disk */
+
+function scanEncode(img, edge, quality){
+  var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+  var scale = Math.min(1, edge / Math.max(w, h));
+  var cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(w * scale));
+  cv.height = Math.max(1, Math.round(h * scale));
+  cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+  var data = cv.toDataURL('image/jpeg', quality);
+  return { b64: data.slice(data.indexOf(',') + 1), w: cv.width, h: cv.height };
+}
 
 function scanDownscale(file, done, fail){
   var url = URL.createObjectURL(file);
   var img = new Image();
   img.onload = function(){
     try {
-      var w = img.naturalWidth, h = img.naturalHeight;
-      var scale = Math.min(1, SCAN_MAX_EDGE / Math.max(w, h));
-      var cw = Math.round(w * scale), ch = Math.round(h * scale);
-      var cv = document.createElement('canvas');
-      cv.width = cw; cv.height = ch;
-      cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
-      var data = cv.toDataURL('image/jpeg', SCAN_QUALITY);
-      done(data.slice(data.indexOf(',') + 1), cw, ch);
-    } catch(e){ fail('That image could not be read.'); }
+      var edge = SCAN_MAX_EDGE, q = SCAN_QUALITY;
+      var out = scanEncode(img, edge, q);
+      /* Quality first, then one step down in size. Bounded: this must never become a loop
+         that grinds a phone trying to hit a number it cannot reach. */
+      while (out.b64.length / 1024 > SCAN_TARGET_KB && q > SCAN_MIN_QUALITY){
+        q = Math.max(SCAN_MIN_QUALITY, q - 0.07);
+        out = scanEncode(img, edge, q);
+      }
+      if (out.b64.length / 1024 > SCAN_TARGET_KB){
+        edge = Math.round(edge * 0.8);
+        out = scanEncode(img, edge, q);
+      }
+      if (typeof scanNote === 'function'){
+        scanNote('photo ' + (img.naturalWidth || img.width) + '×' + (img.naturalHeight || img.height)
+                 + ' → ' + out.w + '×' + out.h + ' at q' + q.toFixed(2));
+      }
+      done(out.b64, out.w, out.h);
+    } catch(e){ fail('That image could not be prepared: ' + ((e && e.message) || 'unknown')); }
     finally { URL.revokeObjectURL(url); }
   };
   img.onerror = function(){ URL.revokeObjectURL(url); fail('That file is not an image this browser can open.'); };
@@ -12131,57 +12230,128 @@ function scanPrompt(notes){
 
 function scanKey(){ return (state.scanKey || '').replace(/^\s+|\s+$/g, ''); }
 
+/* The trail of what actually happened on the last attempt. Kept so a failure can be
+   described precisely instead of guessed at — "it ran twenty seconds and said it never
+   reached the API" is three different faults wearing one message. */
+var scanDiag = [];
+function scanNote(line){
+  scanDiag.push(new Date().toLocaleTimeString() + '  ' + line);
+  var box = document.getElementById('scanDiag');
+  if (box){ box.textContent = scanDiag.join('\n'); show('scanDiagWrap', true); }
+}
+
+/* Bounded on purpose. Without this a request that is never going to arrive hangs until the
+   browser gives up on its own schedule, which on a phone can be a minute or more of a
+   spinner that means nothing. */
+var SCAN_TIMEOUT_MS = 75000;
+
 function scanCallModel(b64, notes, done, fail){
   var key = scanKey();
   if (!key){ fail('NOKEY'); return; }
-  fetch('https://api.anthropic.com/v1/messages', {
+
+  var started = Date.now();
+  var since = function(){ return ((Date.now() - started) / 1000).toFixed(1) + 's'; };
+  var body = JSON.stringify({
+    model: state.scanModel || 'claude-sonnet-5',
+    max_tokens: 4000,
+    messages: [{ role: 'user', content: [
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+      { type: 'text', text: scanPrompt(notes) }
+    ]}]
+  });
+
+  scanNote('request ' + Math.round(body.length / 1024) + ' KB'
+           + ' (image ' + Math.round(b64.length / 1024) + ' KB base64)');
+  scanNote('model ' + (state.scanModel || 'claude-sonnet-5'));
+
+  /* AbortController is not universal on older WebKit; without it the request simply is not
+     bounded, which is worse than the request but not worth failing over. */
+  var ctl = null, timer = null;
+  try { ctl = new AbortController(); } catch(e){}
+  if (ctl) timer = setTimeout(function(){ try { ctl.abort(); } catch(e){} }, SCAN_TIMEOUT_MS);
+  var clear = function(){ if (timer) clearTimeout(timer); };
+
+  var opts = {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       'x-api-key': key,
       'anthropic-version': '2023-06-01',
-      /* Required for a browser to talk to the API directly. The key is the user's
-         own and lives only on this device — there is no server here to hold one. */
+      /* Required for a browser to talk to the API directly. The key is the user's own and
+         lives only on this device — there is no server here to hold one. */
       'anthropic-dangerous-direct-browser-access': 'true'
     },
-    body: JSON.stringify({
-      model: 'claude-sonnet-5',
-      max_tokens: 4000,
-      messages: [{ role: 'user', content: [
-        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
-        { type: 'text', text: scanPrompt(notes) }
-      ]}]
+    body: body
+  };
+  if (ctl) opts.signal = ctl.signal;
+
+  /* THREE separate failures, three separate messages. The first version caught all of them
+     in one place and called every one of them "never reached the API" — so a reply that
+     arrived and could not be parsed was reported as a network fault, and the one piece of
+     information worth having was thrown away. */
+  fetch('https://api.anthropic.com/v1/messages', opts)
+    .then(function(res){
+      clear();
+      scanNote('replied ' + res.status + ' after ' + since());
+      return res.text().then(function(text){ return { res: res, text: text }; });
+    }, function(err){
+      /* Stage one: nothing came back at all. */
+      clear();
+      var aborted = err && (err.name === 'AbortError');
+      scanNote((aborted ? 'aborted' : 'no reply') + ' after ' + since()
+               + ' — ' + ((err && (err.name + ': ' + err.message)) || 'unknown'));
+      fail(aborted
+        ? 'Gave up after ' + Math.round(SCAN_TIMEOUT_MS / 1000) + ' seconds with no reply. '
+          + 'The photo may be too large for this connection, or the request is being blocked.'
+        : 'The request never reached the API (' + since() + '). Either the connection dropped '
+          + 'mid-upload, or this browser is refusing to let the page call the API directly. '
+          + 'Typing the stamps works and gives exactly the same result.');
+      return null;
     })
-  }).then(function(res){
-    return res.json().then(function(body){ return { ok: res.ok, status: res.status, body: body }; });
-  }).then(function(r){
-    if (!r.ok){
-      /* Sentences somebody can act on, not a status code. */
-      var msg = r.status === 401 ? 'That API key was refused. Check it in Settings.'
-              : r.status === 429 ? 'The API is rate limiting. Wait a minute and try again.'
-              : r.status === 400 ? 'The API refused the request. The photo may be too large.'
-              : r.status === 529 || r.status === 503 ? 'The API is busy. Try again shortly.'
-              : 'The API returned an error (' + r.status + ').';
-      if (r.body && r.body.error && r.body.error.message) msg += ' ' + r.body.error.message;
-      fail(msg); return;
-    }
-    var text = '';
-    try { text = r.body.content[0].text; } catch(e){ fail('The reply was not in the expected shape.'); return; }
-    var m = text.match(/\{[\s\S]*\}/);
-    if (!m){ fail('No JSON came back from the read.'); return; }
-    var parsed;
-    try { parsed = JSON.parse(m[0]); } catch(e){ fail('The JSON that came back could not be parsed.'); return; }
-    if (!parsed || !parsed.punches || !parsed.punches.length){ fail('No punches were found on that photo.'); return; }
-    done(parsed.punches);
-  }).catch(function(e){
-    /* A rejected fetch here is not the same as an error FROM the API — the request never
-       arrived. Two things cause it and they need different answers, so say both rather
-       than printing "failed to fetch" and leaving somebody to guess which. */
-    fail('The request never reached the API. Either this device is offline, or the browser '
-       + 'refused the call (some browsers block a page from talking to the API directly). '
-       + 'Typing the stamps still works and produces exactly the same result — everything '
-       + 'after the reading is the same code.');
-  });
+    .then(function(got){
+      if (!got) return;
+      /* Stage two: something came back. Say what, whatever it was. */
+      var res = got.res, text = got.text || '';
+      if (!res.ok){
+        var msg = res.status === 401 ? 'That API key was refused. Check it was copied whole.'
+                : res.status === 403 ? 'That key is not permitted to do this.'
+                : res.status === 404 ? 'The model name was not recognised by your account.'
+                : res.status === 413 ? 'The photo was too large for the API.'
+                : res.status === 429 ? 'Rate limited. Wait a minute and try again.'
+                : (res.status === 529 || res.status === 503) ? 'The API is busy. Try again shortly.'
+                : 'The API answered with an error (' + res.status + ').';
+        var detail = '';
+        try { detail = JSON.parse(text).error.message; } catch(e){ detail = text.slice(0, 160); }
+        scanNote('error body: ' + detail.slice(0, 200));
+        fail(msg + (detail ? ' — ' + detail : ''));
+        return;
+      }
+      /* Stage three: it answered, and answered well. Anything wrong now is the shape of
+         the reply, which is a different problem with a different fix. */
+      var parsed;
+      try { parsed = JSON.parse(text); }
+      catch(e){ scanNote('reply was not JSON'); fail('The API answered, but not with JSON.'); return; }
+      var out = '';
+      try { out = parsed.content[0].text; }
+      catch(e){ scanNote('unexpected reply shape'); fail('The API answered in an unexpected shape.'); return; }
+      var m = out.match(/\{[\s\S]*\}/);
+      if (!m){ scanNote('no JSON in the model reply'); fail('The card was read, but no punches came back in a readable form.'); return; }
+      var data;
+      try { data = JSON.parse(m[0]); }
+      catch(e){ scanNote('punch JSON would not parse'); fail('The punches came back malformed.'); return; }
+      if (!data || !data.punches || !data.punches.length){
+        scanNote('zero punches returned');
+        fail('No punches were found on that photo. If the card is at an angle or in shadow, a straighter shot usually fixes it.');
+        return;
+      }
+      scanNote('read ' + data.punches.length + ' punches in ' + since());
+      done(data.punches);
+    })
+    .catch(function(e){
+      clear();
+      scanNote('unexpected: ' + ((e && e.message) || e));
+      fail('Something went wrong handling the reply. ' + ((e && e.message) || ''));
+    });
 }
 
 /* ---- 3+4. pair, review, and reconcile against what is already logged ---- */
@@ -12372,6 +12542,10 @@ function scanUndo(){
    filed against this pay period. Anything else is two code paths that can disagree about
    what a scan does, and only one of them gets tested. */
 function scanFromBlob(blob){
+  /* One attempt, one trail — reset here, where an attempt starts, rather than inside the
+     API call, which would wipe what the downscale already recorded. */
+  scanDiag = [];
+  show('scanDiagWrap', false);
   if (!scanKey()){
     scanSay('Reading a photo needs an API key — Settings → Scanning. Until then, ' +
             '"Type the stamps instead" runs exactly the same pipeline.', true);
@@ -12435,6 +12609,13 @@ function scanFromBlob(blob){
   scanEl('scanApply').onclick = scanApply;
   scanEl('scanCancel').onclick = function(){ scanJob = null; show('scanResult', false); scanSay(''); };
   scanEl('scanUndoBtn').onclick = scanUndo;
+  scanEl('scanDiagCopy').onclick = function(){
+    var t = scanEl('scanDiag').textContent || '';
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(t).then(function(){ toast('Copied.'); },
+                                           function(){ toast('Select it and copy by hand.'); });
+    } else { toast('Select it and copy by hand.'); }
+  };
   renderScanUndo();
 })();
 

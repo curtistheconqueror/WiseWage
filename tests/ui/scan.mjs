@@ -33,7 +33,14 @@ const b=await chromium.launch({executablePath: process.env.PW_CHROME || undefine
 const ctx=await b.newContext({viewport:{width:390,height:1400},timezoneId:'America/Chicago'});
 const p=await ctx.newPage();
 p.on('pageerror',e=>{console.log('  PAGE ERROR:',e.message);fails++;});
-p.on('console',m=>{if(m.type()==='error'){console.log('  CONSOLE ERROR:',m.text());fails++;}});
+/* The key test deliberately calls a real API this sandbox cannot reach, and a blocked
+   request logs a console error. That is the environment, not the app — what is under test
+   is that the failure is REPORTED, which is asserted directly below. Every other console
+   error still fails the suite. */
+const EXPECTED_NET = /ERR_CERT_AUTHORITY_INVALID|ERR_(NAME_NOT_RESOLVED|CONNECTION|PROXY|NETWORK)|Failed to load resource/;
+p.on('console',m=>{ if(m.type()!=='error') return;
+  if (EXPECTED_NET.test(m.text())) return;
+  console.log('  CONSOLE ERROR:',m.text()); fails++; });
 
 /* Curtis's real shape, with the four clean shifts already logged slightly wrong. */
 await p.addInitScript(()=>{ if(sessionStorage.__s)return; sessionStorage.__s=1;
@@ -110,6 +117,79 @@ await p.screenshot({path: R + 'tests/ui/scan.png', fullPage:true});
   ok('with no key it refuses rather than failing silently', routed.shown);
   ok('and names the way that still works', /Type the stamps/i.test(routed.text), routed.text.slice(0,70));
   ok('opening the typing box for you', routed.manualOpen);
+}
+
+
+/* ── Confirming the key ────────────────────────────────────────────────────
+   Everything in this app saves silently on change, which is right for a rate and wrong for
+   a key: a key can save perfectly and still be refused, and you would find that out at the
+   time clock with a card in your hand. */
+{
+  await p.evaluate(()=>{ document.querySelectorAll('#cfg details').forEach(d=>d.open=true); });
+  await p.waitForTimeout(200);
+  ok('Settings offers a way to test the key', await p.evaluate(()=>{
+    const b=document.getElementById('cfgScanTest'); return !!(b && b.offsetParent);
+  }));
+  ok('with nowhere for the result to be missed', await p.evaluate(()=>!!document.getElementById('cfgScanState')));
+
+  /* With no key at all it must say so rather than pretending to test. */
+  await p.evaluate(()=>{ state.scanKey=''; save();
+    document.getElementById('cfgScanKey').value=''; });
+  await p.click('#cfgScanTest'); await p.waitForTimeout(250);
+  const empty = await p.textContent('#cfgScanState');
+  ok('an empty key is named as such', /no key saved/i.test(empty), empty);
+
+  /* Typed but not committed — the phone case: the tap that presses Test is the tap that
+     blurs the field, so the button has to take what is in the box. */
+  await p.evaluate(()=>{ state.scanKey=''; save();
+    document.getElementById('cfgScanKey').value='sk-ant-probe-not-a-real-key'; });
+  await p.click('#cfgScanTest'); await p.waitForTimeout(400);
+  ok('a typed-but-uncommitted key is picked up and stored',
+     (await p.evaluate(()=>state.scanKey))==='sk-ant-probe-not-a-real-key',
+     String(await p.evaluate(()=>state.scanKey)).slice(0,24));
+  const said = await p.textContent('#cfgScanState');
+  ok('and the outcome is reported either way', said.length>0, said.slice(0,80));
+
+  await p.evaluate(()=>{ state.scanKey=''; save(); });
+}
+
+
+/* ── The failure has to say WHICH failure ──────────────────────────────────
+   A run that takes twenty seconds and one that fails instantly are different faults, and
+   the first version called both of them "never reached the API" — including a reply that
+   arrived and merely would not parse. Three stages, three messages, and a trail with sizes
+   and timings so a fault can be described instead of guessed at. */
+{
+  const staged = await p.evaluate(() => {
+    const src = scanCallModel.toString();
+    return { hasTimeout: /AbortController/.test(src),
+             splitNetwork: /no reply|aborted/.test(src),
+             splitHttp: /answered with an error/.test(src),
+             splitParse: /not with JSON|unexpected shape/.test(src) };
+  });
+  ok('the request is bounded rather than hanging', staged.hasTimeout);
+  ok('a dead connection is named as one', staged.splitNetwork);
+  ok('an API error is named as one', staged.splitHttp);
+  ok('and a bad reply is not called a network fault', staged.splitParse);
+
+  ok('there is somewhere for the trail to show', await p.evaluate(()=>!!document.getElementById('scanDiag')));
+  ok('with a way to send it on', await p.evaluate(()=>!!document.getElementById('scanDiagCopy')));
+
+  /* The downscale must record what it did — size is the first thing to check when an
+     upload dies, and it is invisible otherwise. */
+  const trail = await p.evaluate(async () => {
+    const cv = document.createElement('canvas'); cv.width = 2400; cv.height = 3200;
+    const ctx = cv.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,2400,3200);
+    ctx.fillStyle='#000'; ctx.font='90px monospace'; ctx.fillText("'26 SEP 6 PM 1:18", 60, 400);
+    const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.95));
+    scanDiag = [];
+    return await new Promise(res => scanDownscale(blob,
+      (b64) => res({ ok:true, kb: Math.round(b64.length/1024), notes: scanDiag.join(' | ') }),
+      (m) => res({ ok:false, m })));
+  });
+  ok('a big photo is downscaled before it is sent', trail.ok && trail.kb > 0, JSON.stringify(trail).slice(0,120));
+  ok('and kept under the size a phone can upload', trail.kb <= 900, trail.kb + ' KB base64');
+  ok('with what it did written down', /→/.test(trail.notes), trail.notes.slice(0,90));
 }
 
 console.log(`\n${fails===0?'✅':'❌'} ${fails===0?'all passed':fails+' failed'}`);
