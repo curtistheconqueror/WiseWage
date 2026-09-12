@@ -83,5 +83,34 @@ ok('undo restores the original count', (await p.evaluate(()=>state.sessions.leng
 ok('and the original Monday end time', await p.evaluate(()=>{
   const s=state.sessions.find(s=>s.id==='a2'); return new Date(s.end).getHours()===22 && new Date(s.end).getMinutes()===30;}));
 await p.screenshot({path: R + 'tests/ui/scan.png', fullPage:true});
+
+/* ── Reading a copy already filed ──────────────────────────────────────────
+   The first version made you photograph the card a second time, inside a different card,
+   to read a photo the app was already holding. This is the route from the filed copy. */
+{
+  await p.evaluate(()=>{ document.querySelectorAll('#cfg details,.col').forEach(d=>d.classList.add('open')); });
+  ok('the viewer offers a read button', await p.evaluate(()=>!!document.getElementById('shViewScan')));
+  ok('and a delete button, apart from it', await p.evaluate(()=>{
+    const bar=document.querySelector('.shviewbar');
+    return !!(bar && bar.querySelector('#shViewScan') && bar.querySelector('#shViewDel'));
+  }));
+  ok('both are one entry point, not two pipelines',
+     await p.evaluate(()=>typeof scanFromBlob==='function'));
+  /* A filed copy is a Blob; the camera hands over a File, which is a Blob. Same door. */
+  const routed = await p.evaluate(async () => {
+    const cv=document.createElement('canvas'); cv.width=cv.height=40;
+    const blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',0.7));
+    state.scanKey='';                       // no key: must refuse, and say how to proceed
+    scanFromBlob(blob);
+    await new Promise(r=>setTimeout(r,300));
+    const err=document.getElementById('scanErr');
+    return { shown: !!err && !err.classList.contains('hide'), text: err? err.textContent : '',
+             manualOpen: !document.getElementById('scanManualWrap').classList.contains('hide') };
+  });
+  ok('with no key it refuses rather than failing silently', routed.shown);
+  ok('and names the way that still works', /Type the stamps/i.test(routed.text), routed.text.slice(0,70));
+  ok('opening the typing box for you', routed.manualOpen);
+}
+
 console.log(`\n${fails===0?'✅':'❌'} ${fails===0?'all passed':fails+' failed'}`);
 await b.close(); srv.close(); process.exit(fails?1:0);

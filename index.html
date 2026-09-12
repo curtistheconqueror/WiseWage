@@ -670,8 +670,11 @@
   .shphotos .ph img{width:100%;height:100%;object-fit:cover;display:block}
   .shview{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.92);display:flex;
     flex-direction:column;gap:14px;align-items:center;justify-content:center;cursor:pointer}
-  .shview img{max-width:96vw;max-height:84vh;object-fit:contain}
+  .shview img{max-width:96vw;max-height:78vh;object-fit:contain}
   .shview button{min-height:44px}
+  /* The two actions sit on one row so neither is the one your thumb lands on by default,
+     and the destructive one is not directly under the image where a tap to dismiss goes. */
+  .shviewbar{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;padding:0 14px}
   /* printing: the sheet and nothing else */
   #printSheet{background:#fff;color:#000}
   @media print{
@@ -1849,6 +1852,10 @@
         <button class="btn go" id="scanPick">📷 Photograph the card</button>
         <button class="mini" id="scanTypeToggle">⌨ Type the stamps instead</button>
       </div>
+      <!-- The other way in. A copy filed against this period is already a photograph of the
+           card, so making somebody take a second one was busywork. -->
+      <div class="note" style="margin-top:9px">Already filed a photo of this card under
+      <b>Custom data → Filed copies</b>? Open it there and press <b>Read this card</b>.</div>
       <input type="file" id="scanFile" accept="image/*" capture="environment" class="hide">
 
       <!-- The operator already knows which row is ambiguous. 500 characters that ride
@@ -2682,7 +2689,13 @@
 
 <!-- A filed photo, full screen. Tapping anywhere closes it. -->
 <div class="shview hide" id="shView"><img id="shViewImg" alt="Filed copy">
-  <button class="mini danger" id="shViewDel">✕ Delete this copy</button></div>
+  <!-- Reading a copy you have already filed is the obvious thing to want, and the version
+       before this one made you photograph the card a second time in a different card to do
+       it. Deliberately at the opposite end from Delete: one reads, one destroys. -->
+  <div class="shviewbar">
+    <button class="btn go" id="shViewScan">⌁ Read this card</button>
+    <button class="mini danger" id="shViewDel">✕ Delete this copy</button>
+  </div></div>
 
 <div class="toast" id="toast"></div>
 
@@ -5852,7 +5865,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v81';
+var APP_BUILD = 'v82';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -12355,6 +12368,30 @@ function scanUndo(){
         + (kept ? '. ' + kept + ' you edited since were left alone.' : '.'));
 }
 
+/* One way in, whatever the picture came from — the camera, the library, or a copy already
+   filed against this pay period. Anything else is two code paths that can disagree about
+   what a scan does, and only one of them gets tested. */
+function scanFromBlob(blob){
+  if (!scanKey()){
+    scanSay('Reading a photo needs an API key — Settings → Scanning. Until then, ' +
+            '"Type the stamps instead" runs exactly the same pipeline.', true);
+    show('scanManualWrap', true);
+    return;
+  }
+  show('scanNotesWrap', true);
+  scanSay('Shrinking the photo…');
+  scanDownscale(blob, function(b64){
+    scanSay('Reading the card… this takes a few seconds.');
+    scanCallModel(b64, (scanEl('scanNotes').value || ''), function(punches){
+      scanSay('');
+      scanJob = { res: scanBuild(punches) };
+      scanRenderReview();
+    }, function(msg){
+      scanSay(msg === 'NOKEY' ? 'No API key set — Settings → Scanning.' : msg, true);
+    });
+  }, function(msg){ scanSay(msg, true); });
+}
+
 /* ---- wiring ---- */
 (function(){
   var pick = scanEl('scanPick'); if (!pick) return;
@@ -12377,18 +12414,7 @@ function scanUndo(){
   scanEl('scanFile').onchange = function(e){
     var f = e.target.files && e.target.files[0];
     e.target.value = '';
-    if (!f) return;
-    scanSay('Shrinking the photo…');
-    scanDownscale(f, function(b64){
-      scanSay('Reading the card…');
-      scanCallModel(b64, (scanEl('scanNotes').value || ''), function(punches){
-        scanSay('');
-        scanJob = { res: scanBuild(punches) };
-        scanRenderReview();
-      }, function(msg){
-        scanSay(msg === 'NOKEY' ? 'No API key set — Settings → Scanning.' : msg, true);
-      });
-    }, function(msg){ scanSay(msg, true); });
+    if (f) scanFromBlob(f);
   };
   scanEl('scanRead').onclick = function(){
     var lines = (scanEl('scanManual').value || '').split('\n');
@@ -12822,6 +12848,22 @@ function shViewClose(){
   show('shView', false);
 }
 document.getElementById('shView').onclick = shViewClose;
+/* Send a filed copy to the scanner. The blob is already downscaled to 1600px on the way
+   in, so it goes to the reader as-is rather than being re-encoded a second time — every
+   re-encode costs stroke detail, and a punch stamp is nothing but stroke detail. */
+document.getElementById('shViewScan').onclick = function(e){
+  e.stopPropagation();
+  var id = shViewing;
+  if (!id) return;
+  photoGet(id).then(function(rec){
+    if (!rec) return;
+    shViewClose();
+    var sec = document.getElementById('scan');
+    if (sec){ sec.classList.add('open'); uiOpen().open.scan = true; save(); }
+    if (sec && sec.scrollIntoView) sec.scrollIntoView({ block: 'start' });
+    scanFromBlob(rec.blob);
+  });
+};
 document.getElementById('shViewDel').onclick = function(e){
   e.stopPropagation();
   var id = shViewing;
