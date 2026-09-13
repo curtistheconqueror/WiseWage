@@ -219,6 +219,22 @@ const small=await mob.evaluate(()=>[...document.querySelectorAll('button,input,s
   .filter(b=>b.offsetParent!==null && b.type!=='file' && b.type!=='checkbox')
   .filter(b=>b.getBoundingClientRect().height < 44)
   .map(b=>(b.id||b.className||b.tagName)+':'+Math.round(b.getBoundingClientRect().height)));
+/* Two elements sharing an id is not a style complaint — getElementById returns whichever
+   comes first in the document, so one of them silently becomes furniture that never
+   updates, and which one depends on markup order rather than on anything anyone decided.
+   Found by a real collision: a new editor reused four ids from the day-off editor, its own
+   tests passed because its markup happened to come first, and the day-off editor broke. */
+{
+  const dupes = await page.evaluate(() => {
+    const seen = {}, bad = [];
+    document.querySelectorAll('[id]').forEach(el => {
+      const id = el.id;
+      if (seen[id]) { if (bad.indexOf(id) < 0) bad.push(id); } else { seen[id] = 1; }
+    });
+    return bad;
+  });
+  ok('no two elements share an id', dupes.length === 0, dupes.join(', ') || 'none');
+}
 ok('every control meets the 44px touch minimum', small.length===0, small.join(', '));
 await mob.close();
 

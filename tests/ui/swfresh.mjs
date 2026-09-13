@@ -146,7 +146,11 @@ console.log('\n━━ The refresh button: clears the app, keeps the data ━━'
      /v\d+/.test(await p.textContent('#verNote')), await p.textContent('#verNote'));
   await p.locator('#swRefresh').scrollIntoViewIfNeeded();
   await Promise.all([p.waitForNavigation({timeout:15000}).catch(()=>{}), p.click('#swRefresh')]);
-  await p.waitForTimeout(1800);
+  /* Wait for the outcome, not for a guess at how long it takes. A fixed sleep here is a
+     test that passes on a fast machine and lies on a slow one — and it silently became too
+     short as the page grew, reporting a working button as broken. */
+  await p.waitForFunction(() => document.title.indexOf('BUILD-HOTEL') > -1,
+                          null, { timeout: 15000 }).catch(()=>{});
 
   ok('pressing it brings the new build in', (await p.title()).includes('BUILD-HOTEL'),
      await p.title());

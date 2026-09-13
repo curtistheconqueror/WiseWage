@@ -1418,6 +1418,33 @@
       <button class="mini" id="backOpen">⏱ Missed your clock in?</button>
       <button class="mini hide" id="resumeOpen">↩ Clocked out by accident?</button>
     </div>
+    <!-- The mirror of "Missed your clock in?", and it was missing. Leaving late and
+         realising at home meant clocking out at the wrong time on purpose and then editing
+         the shift in the log — two steps, one of them a deliberate lie to the app, and a
+         window in between where the figures on screen were wrong. Close it at the time it
+         actually ended instead. Only ever on screen while the clock is running. -->
+    <div class="backrow hide" id="outrow">
+      <button class="mini" id="outOpen">⏱ Forgot to clock out?</button>
+    </div>
+
+    <div class="editor hide" id="backout">
+      <div class="etitle">Close the shift at the time you left</div>
+      <div class="emode" id="coMode">
+        <button data-m="time" class="on">I left at</button><button data-m="ago">Hours ago</button>
+      </div>
+      <div class="egrid">
+        <div class="f" id="fcoDate"><label for="coDate">Date</label><input type="date" id="coDate"></div>
+        <div class="f" id="fcoTime"><label for="coTime">Time I clocked out</label><input type="time" id="coTime"></div>
+        <div class="f hide" id="fcoAgo"><label for="coAgo">Hours ago I left</label>
+          <input type="number" id="coAgo" min="0.01" max="168" step="0.25" value="1"></div>
+      </div>
+      <div class="epreview" id="coPreview"></div>
+      <div class="eerr hide" id="coErr"></div>
+      <div class="eactions">
+        <button class="btn go" id="coStop">Close it there</button>
+        <button class="btn ghost" id="coCancel">Cancel</button>
+      </div>
+    </div>
     <div class="confirm hide" id="resumeConfirm" style="border-color:var(--acc)">
       <span id="resumeTxt"></span>
       <button class="mini" id="resumeYes">Reopen the shift</button>
@@ -2659,15 +2686,6 @@
         <label>Back up &amp; move your data</label>
         <div class="note">Your rate, schedule and every shift live in this browser only. Save a backup
         to keep a copy, or to carry everything to another device or another copy of this app.</div>
-      </div>
-      <div class="note" id="lunchNote" style="margin-top:10px">Lunch starts after 5 worked hours — 
-      the clock pauses for it mid-shift, shifts already logged are corrected automatically, and lunch
-      time never counts toward overtime. 'Extra' is only for lunches hiding in hours the log cannot
-      see, like a year-so-far carry-in — logged shifts are already handled.</div>
-      <div class="note hide" id="rHist" style="margin-top:10px"></div>
-      <div class="confirm hide" id="cfgUndo" style="border-color:var(--warn);background:rgba(255,180,84,.10)">
-        <span id="cfgUndoTxt"></span>
-        <button class="mini" id="cfgUndoBtn">↩ Undo that change</button>
       </div>
       <div class="actions" style="justify-content:flex-start;margin-top:12px">
         <button class="mini" id="backup">⇩ Save a backup</button>
@@ -5886,7 +5904,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v84';
+var APP_BUILD = 'v85';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -6967,9 +6985,13 @@ function render(){
       + 'your scheduled hours ' + (state.cfg.makeUpWindow === 'week' ? 'this week' : 'this pay period')
       + '. Hours past ' + otThresholdOf(state.cfg) + ' pay it down first.';
   }
-  // "Started earlier" only makes sense before a shift is running.
+  /* Exactly one of the two is ever offered, and which one depends only on whether the
+     clock is running. "Missed your clock in?" before a shift, "Forgot to clock out?"
+     during one — the same mistake seen from either side of it. */
   if (active){ show('backrow', false); show('backdate', false); show('resumeConfirm', false); }
   else if (document.getElementById('backdate').classList.contains('hide')) show('backrow', true);
+  if (!active){ show('outrow', false); show('backout', false); }
+  else if (document.getElementById('backout').classList.contains('hide')) show('outrow', true);
 
   /* Reopening is offered only while there is actually a recent shift to reopen, so the
      button is never there tempting you to resurrect something from this morning. */
@@ -10959,6 +10981,97 @@ document.getElementById('themeReset').onclick = function(){
   toast('Back to the default look.');
 };
 
+/* ---- closing a shift at the time it actually ended ----
+
+   The mirror of the backdate editor above. Without it, realising at home that you never
+   punched out meant clocking out at the wrong time deliberately and then editing the shift
+   in the log — two steps, the first of which puts a figure into the app that you know is
+   false, and a gap in between where every total on screen is wrong.
+
+   clockOut() already takes a time, so this is a way in rather than new arithmetic. */
+var outMode = 'time';
+
+function readBackout(){
+  var now = Date.now(), began = state.activeStart;
+  if (!began) return { error: 'The clock is not running.' };
+  var end;
+  if (outMode === 'time'){
+    var d = el('coDate').value, t = el('coTime').value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !t) return { error: 'Pick the date and time you actually left.' };
+    end = shopStamp(d, t);
+    if (isNaN(end)) return { error: 'Could not read that date and time.' };
+  } else {
+    var h = parseFloat(el('coAgo').value);
+    if (!isFinite(h) || h <= 0) return { error: 'Enter how long ago you left.' };
+    if (h > 168) return { error: 'That is more than a week ago — fix it in the shift log instead.' };
+    end = now - h * HOUR_MS;
+  }
+  /* An end in the future would pay for time not yet worked, and one at or before the start
+     would bin the shift entirely. Both are refused rather than quietly adjusted — a silent
+     correction here is a wrong number nobody sees. */
+  if (end > now) return { error: 'That is in the future. Use Clock Out to finish now.' };
+  if (end <= began) return { error: 'That is at or before you clocked in at ' + ptime(began) + '.' };
+  return { end: end, began: began };
+}
+
+function previewBackout(){
+  var r = readBackout(), box = el('coPreview');
+  if (r.error){ box.innerHTML = '<span style="opacity:.6">' + r.error + '</span>'; return; }
+  var hrs = (r.end - r.began) / HOUR_MS;
+  var gross = payForSpan(r.began, hrs);
+  /* What is on the clock right now, so the difference the correction makes is visible
+     rather than being something you work out afterwards from a changed total. */
+  var nowHrs = (Date.now() - r.began) / HOUR_MS;
+  box.innerHTML = 'Close the shift at <b>' + fdate(new Date(r.end)) + ' ' + ptime(r.end) + '</b>'
+    + '<br><b>' + hrs.toFixed(2) + ' h</b> and <span class="pay">' + money(gross) + '</span> banked'
+    + '<br><span style="opacity:.7">instead of ' + nowHrs.toFixed(2) + ' h if you closed it now — '
+    + (nowHrs - hrs).toFixed(2) + ' h less</span>';
+}
+
+function openBackout(){
+  if (!state.activeStart) return;
+  /* Defaults to an hour ago rather than to now: somebody opening this has already left, and
+     "now" is the one answer that is certainly wrong. */
+  var guess = Math.max(state.activeStart + 60000, Date.now() - HOUR_MS);
+  el('coDate').value = shopDateValue(guess);
+  el('coTime').value = shopTimeValue(guess);
+  el('coAgo').value = 1;
+  setOutMode('time');
+  show('backout', true); show('outrow', false);
+  previewBackout();
+}
+function closeBackout(){ show('backout', false); show('outrow', !!state.activeStart); show('coErr', false); }
+function setOutMode(m){
+  outMode = m;
+  [].forEach.call(document.querySelectorAll('#coMode button'), function(b){
+    b.classList.toggle('on', b.dataset.m === m);
+  });
+  show('fcoDate', m === 'time'); show('fcoTime', m === 'time');
+  show('fcoAgo', m === 'ago');
+}
+function stopBackdated(){
+  var r = readBackout();
+  if (r.error){ el('coErr').textContent = r.error; show('coErr', true); return; }
+  show('coErr', false);
+  var hrs = (r.end - r.began) / HOUR_MS;
+  clockOut(r.end, true);
+  closeBackout();
+  lastMoney = ''; lastHeavySig = ''; _ledCache = {}; render();
+  toast('Closed at ' + ptime(r.end) + ' — ' + hrs.toFixed(2) + ' h on the clock.');
+}
+
+document.getElementById('outOpen').onclick = openBackout;
+document.getElementById('coCancel').onclick = closeBackout;
+document.getElementById('coStop').onclick = stopBackdated;
+document.getElementById('coMode').addEventListener('click', function(e){
+  var b = e.target.closest('button'); if (!b) return;
+  setOutMode(b.dataset.m); previewBackout();
+});
+['coDate', 'coTime', 'coAgo'].forEach(function(id){
+  var e = document.getElementById(id);
+  if (e) e.addEventListener('input', previewBackout);
+});
+
 document.getElementById('backOpen').onclick = openBackdate;
 document.getElementById('resumeOpen').onclick = function(){
   if (!resumableShift()){ toast('No recent shift to reopen.'); return; }
@@ -12096,10 +12209,29 @@ syncControls();
     } catch(e){}
     Promise.all(jobs).then(function(){
       say('Reopening…');
-      /* A fresh query string so the reload cannot be answered from an HTTP cache either. */
-      setTimeout(function(){
+      /* Unregistering does not take effect instantly, and a worker that has not let go yet
+         can still answer the very navigation meant to escape it — which is the one request
+         that must reach the network. So wait for the registrations to actually be gone
+         before reloading, rather than guessing at a delay.
+
+         Bounded, and it reloads anyway when the wait runs out: a page that never reloads is
+         a worse failure than one that reloads a moment early, and this button is what
+         somebody presses when nothing else has worked. */
+      var waited = 0;
+      var go = function(){
         try { location.href = './?fresh=' + Date.now(); } catch(e){ location.reload(); }
-      }, 600);
+      };
+      var settle = function(){
+        if (waited >= 3000 || !navigator.serviceWorker || !navigator.serviceWorker.getRegistrations){
+          go(); return;
+        }
+        navigator.serviceWorker.getRegistrations().then(function(regs){
+          if (!regs.length){ setTimeout(go, 150); return; }
+          waited += 200;
+          setTimeout(settle, 200);
+        }).catch(go);
+      };
+      setTimeout(settle, 200);
     });
   };
 })();
