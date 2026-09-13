@@ -1503,16 +1503,35 @@
       </div>
     </div>
 
-    <!-- Full only. Scheduling a punch in advance, capping a shift automatically and
-         pricing a hypothetical are three things you go looking for once the app is part of
-         your day. On a first Lite screen they are three more controls between someone and
-         the button that says Clock In. -->
-    <div class="planrow fullonly">
+    <!-- Auto clock-in and auto-stop were briefly Full only, on the theory that scheduling
+         a punch in advance is something you go looking for once the app is part of your
+         day. Wrong twice over.
+
+         Somebody on a fixed roster wants it on day one, and a Lite user is if anything MORE
+         likely to want the app to do the punching, not less.
+
+         And hiding it did not stop it. checkAutoIn reads state, never the screen, so it
+         kept firing — leaving a Lite user with a feature acting on their clock that they
+         could not see, verify or switch off, and with the day picker it depends on gone
+         too. Hiding the control while the behaviour continues is the wrong half to hide;
+         if a feature does not belong in a mode, it has to stop running there, not just
+         stop being visible. It belongs in both, so it is in both.
+
+         The what-if projector below stays Full only: that one only prices a hypothetical
+         and does nothing at all when nobody is looking at it. -->
+    <div class="planrow">
       <label class="swrap"><input type="checkbox" id="autoOn"> Auto clock-in at</label>
       <input type="time" id="autoAt">
       <span class="eta" id="autoEta"></span>
     </div>
-    <div class="autodays hide fullonly" id="autoDays">
+    <!-- The one thing about auto clock-in that surprises people, said only to those who
+         have switched it on. A web app cannot run while it is closed: there is no timer in
+         the background, so nothing happens at 2 PM unless the app is open at 2 PM. What it
+         does instead is backdate — open it at any point inside the window and the punch
+         lands on the time you asked for, not the time you opened it. Worth saying plainly,
+         because somebody expecting a background alarm will conclude it is broken. -->
+    <div class="note hide" id="autoNote" style="margin-top:6px"></div>
+    <div class="autodays hide" id="autoDays">
       <span class="adlbl">on</span>
       <button data-d="0">Sun</button><button data-d="1">Mon</button><button data-d="2">Tue</button>
       <button data-d="3">Wed</button><button data-d="4">Thu</button><button data-d="5">Fri</button>
@@ -1529,7 +1548,7 @@
       <button class="mini" id="taxStaleGo">Open deductions</button>
     </div>
 
-    <div class="planrow fullonly">
+    <div class="planrow">
       <label class="swrap"><input type="checkbox" id="planOn"> Auto-stop after</label>
       <input type="number" id="planHrs" min="0.25" max="24" step="0.25" value="8"> <span>hours today</span>
       <span class="eta" id="planEta"></span>
@@ -5939,7 +5958,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v86';
+var APP_BUILD = 'v87';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -7050,6 +7069,13 @@ function render(){
   show('autoConfirm', !!autoNotice && !!active);
   if (autoNotice && active) document.getElementById('autoTxt').textContent = autoNotice;
   if (!active) autoNotice = '';
+
+  var anote = document.getElementById('autoNote');
+  show('autoNote', !!state.autoOn);
+  if (state.autoOn && anote){
+    anote.textContent = 'Starts the clock when you open the app, backdated to that time — '
+      + 'a phone cannot punch in for you while the app is closed.';
+  }
 
   var aeta = document.getElementById('autoEta');
   if (state.autoOn && !active){

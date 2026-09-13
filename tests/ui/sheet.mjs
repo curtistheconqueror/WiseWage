@@ -94,8 +94,15 @@ console.log('\n━━ Signed once, stamped after ━━');
   ok('and said to be', /Signed/.test(await p.textContent('#shSigState')), await p.textContent('#shSigState'));
   await p.click('#shSigClear'); await p.waitForTimeout(300);
   ok('clearing it unsigns', (await p.evaluate(()=>state.cfg.sheet.sig))==='');
-  await p.mouse.move(cv.x+30,cv.y+60); await p.mouse.down();
-  await p.mouse.move(cv.x+200,cv.y+70,{steps:6}); await p.mouse.up(); await p.waitForTimeout(300);
+  /* Measured AGAIN, not reused. Clearing rewrites the status line above the canvas, which
+     reflows it — so the box captured before the clear can be a few pixels stale and the
+     stroke lands off the canvas. It missed only sometimes, which is worse than always:
+     the suite passed or failed on identical code depending on how the text happened to
+     wrap, and cost more than one wrong diagnosis before it was chased down. */
+  await p.locator('#shSig').scrollIntoViewIfNeeded(); await p.waitForTimeout(200);
+  const cv2 = await p.locator('#shSig').boundingBox();
+  await p.mouse.move(cv2.x+30,cv2.y+60); await p.mouse.down();
+  await p.mouse.move(cv2.x+200,cv2.y+70,{steps:6}); await p.mouse.up(); await p.waitForTimeout(300);
   ok('and it can simply be signed again', await p.evaluate(()=>state.cfg.sheet.sig.length>500));
 }
 

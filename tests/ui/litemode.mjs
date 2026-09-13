@@ -98,7 +98,9 @@ ok('no running monthly total on the clock card', !(await seen('monmoney')));
 ok('no note explaining a disagreement nobody has hit yet',
    !(await p.evaluate(() => { const e = document.querySelector('#hero .helpnote');
      return !!(e && e.offsetParent); })));
-ok('no auto clock-in row', !(await seen('autoOn')));
+/* Auto clock-in was briefly hidden here. It kept firing regardless, so the only thing
+   hiding it achieved was taking away the switch — see the section at the end. */
+ok('but auto clock-in is here, because it runs here', await seen('autoOn'));
 ok('no what-if projector', !(await seen('wifBtn')));
 ok('and no By pay month list under Earnings', !(await seen('monBtn')));
 ok('the backdate button names the mistake, not the fix',
@@ -242,6 +244,58 @@ console.log('\n━━ Battery saver is a separate setting and still works ━━
   ok('and no tagline in the footer', !(await seen('#footNote')));
   ok('but the build number is still findable', await seen('#appVer'));
   await p2.close(); await fresh.close();
+}
+
+
+/* ── A mode may hide a feature, never half of one ──────────────────────────
+   Auto clock-in was made Full only. It kept firing anyway — checkAutoIn reads state, never
+   the screen — so a Lite user had a feature starting their shifts that they could not see,
+   verify or switch off, and the day picker it depends on had vanished with it. The person
+   this was built for found it by not being clocked in and going looking for the controls.
+
+   So the rule this guards is not "auto clock-in is in Lite". It is: if behaviour runs in a
+   mode, its controls are reachable in that mode. */
+{
+  const armed = await b.newContext({ viewport:{width:390,height:900},
+    timezoneId:'America/Chicago', locale:'en-US' });
+  const p3 = await armed.newPage();
+  p3.on('pageerror', e => { console.log('  PAGE ERROR:', e.message); fails++; });
+  /* 14:05 on a Wednesday, five minutes past a 14:00 auto clock-in, on a ticked day. */
+  await p3.clock.install({ time: new Date(2026, 8, 9, 14, 5, 0) });
+  await p3.addInitScript(() => { if (sessionStorage.__s) return; sessionStorage.__s = 1;
+    localStorage.setItem('payclock.v1', JSON.stringify({ configured:true, mode:'lite',
+      cfg:{ rate:37.78, otMode:'eight40', schedStart:'14:00', schedEnd:'22:30',
+            workDays:[true,true,true,true,true,false,false],
+            periodAnchor:'2026-09-06', periodLengthDays:14,
+            holidays:[], banks:[], daysOff:[], vacations:[] },
+      sessions:[], activeStart:null, sound:false,
+      autoOn:true, autoAt:'14:00',
+      autoDays:[true,true,true,true,true,false,false], autoLast:'' }));
+  });
+  await p3.goto('http://localhost:8213/'); await p3.waitForTimeout(1200);
+  const vis = (id) => p3.evaluate(i => { const e = document.getElementById(i);
+    return !!(e && e.offsetParent); }, id);
+
+  ok('auto clock-in still fires in Lite', await p3.evaluate(() => !!state.activeStart));
+  ok('and it started at the time asked for, not at load',
+     await p3.evaluate(() => { const d = new Date(state.activeStart);
+       return d.getHours() === 14 && d.getMinutes() === 0; }));
+  /* The half that was missing. */
+  ok('the switch that controls it is reachable', await vis('autoOn'));
+  ok('so is the day picker it depends on', await vis('autoDays'));
+  ok('and the auto-stop that pairs with it', await vis('planOn'));
+
+  /* Auto clock-in cannot run in the background — a closed web app has no timer. What it
+     does instead is backdate: open the app any time inside the window and the punch lands
+     on the time asked for. Somebody expecting a background alarm concludes it is broken,
+     so the app says which it is — but only to people who have switched it on. */
+  ok('and it says it needs the app open', await vis('autoNote'));
+  ok('naming the backdating, which is what it does instead',
+     /backdated/i.test(await p3.textContent('#autoNote')));
+  /* Still Full only, and legitimately so: it prices a hypothetical and does nothing
+     whatsoever when nobody is looking at it. */
+  ok('the what-if projector stays Full only', !(await vis('wifBtn')));
+  await p3.close(); await armed.close();
 }
 
 console.log(`\n${fails===0?'✅':'❌'}  ${fails===0?'all passed':fails+' failed'}`);
