@@ -5886,7 +5886,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v83';
+var APP_BUILD = 'v84';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -12331,9 +12331,31 @@ function scanCallModel(b64, notes, done, fail){
       var parsed;
       try { parsed = JSON.parse(text); }
       catch(e){ scanNote('reply was not JSON'); fail('The API answered, but not with JSON.'); return; }
+      /* Take the text from EVERY text block, rather than assuming the first block is one.
+         A reply may legitimately lead with a block of another kind — a thinking block, for
+         instance — and content[0].text is then undefined rather than throwing, so the crash
+         lands one line later on something that looks unrelated. That is exactly what
+         happened on the first real card this ever read: a 200 from the API, thirty-seven
+         seconds of honest work by the model, and a TypeError here threw all of it away. */
       var out = '';
-      try { out = parsed.content[0].text; }
-      catch(e){ scanNote('unexpected reply shape'); fail('The API answered in an unexpected shape.'); return; }
+      try {
+        var blocks = (parsed && parsed.content) || [];
+        var kinds = [];
+        for (var bi = 0; bi < blocks.length; bi++){
+          if (!blocks[bi]) continue;
+          kinds.push(blocks[bi].type || '?');
+          if (typeof blocks[bi].text === 'string') out += blocks[bi].text;
+        }
+        scanNote('reply blocks: ' + (kinds.join(', ') || 'none')
+                 + (parsed.stop_reason ? ' · stop ' + parsed.stop_reason : ''));
+      } catch(e){ scanNote('could not walk the reply'); }
+      if (!out){
+        fail('The API answered, but with no readable text in it'
+           + (parsed && parsed.stop_reason === 'max_tokens'
+              ? ' — it ran out of room before finishing. Try again; if it repeats, the card may have too many stamps for one read.'
+              : '.'));
+        return;
+      }
       var m = out.match(/\{[\s\S]*\}/);
       if (!m){ scanNote('no JSON in the model reply'); fail('The card was read, but no punches came back in a readable form.'); return; }
       var data;

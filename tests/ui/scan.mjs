@@ -192,5 +192,53 @@ await p.screenshot({path: R + 'tests/ui/scan.png', fullPage:true});
   ok('with what it did written down', /→/.test(trail.notes), trail.notes.slice(0,90));
 }
 
+
+/* ── The reply is not always shaped the way you assumed ────────────────────
+   From a real phone, first card ever read: 200 from the API, 37 seconds of the model
+   genuinely reading the punches, and then
+
+       unexpected: undefined is not an object (evaluating \'out.match\')
+
+   because the code took parsed.content[0].text. A reply may lead with a block of another
+   kind, and .text on it is undefined rather than throwing — so the crash lands a line
+   later, looking like something else entirely, and a good read is thrown away. */
+{
+  const shapes = await p.evaluate(() => {
+    /* Drive the real parser by standing in for fetch, so this tests the shipped path
+       rather than a copy of it. */
+    const real = window.fetch;
+    const run = (payload) => new Promise(res => {
+      window.fetch = () => Promise.resolve({
+        ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(payload))
+      });
+      state.scanKey = 'sk-ant-test';
+      scanCallModel('AAAA', '', (punches) => res({ ok: true, n: punches.length }),
+                                (msg) => res({ ok: false, msg: String(msg) }));
+    });
+    const PUNCH = '{"punches":[{"rawText":"\'26 SEP 6 PM 1:18","year":"26","month":"SEP",' +
+      '"day":6,"meridiem":"PM","hour":1,"minute":18,"columnGroup":"REGULAR","printedSlot":"IN",' +
+      '"overstruck":false,"handwritten":false,"marking":"","confidence":0.97,"reviewNote":""}]}';
+    const out = {};
+    return (async () => {
+      out.plain    = await run({ content:[{type:'text', text:PUNCH}] });
+      /* The shape that actually broke it. */
+      out.thinking = await run({ content:[{type:'thinking', thinking:'hmm'},{type:'text', text:PUNCH}] });
+      out.empty    = await run({ content:[] });
+      out.noText   = await run({ content:[{type:'thinking', thinking:'only this'}], stop_reason:'max_tokens' });
+      window.fetch = real;
+      return out;
+    })();
+  });
+  ok('an ordinary reply reads', shapes.plain.ok && shapes.plain.n===1, JSON.stringify(shapes.plain));
+  ok('a reply that leads with another block still reads',
+     shapes.thinking.ok && shapes.thinking.n===1, JSON.stringify(shapes.thinking));
+  ok('an empty reply fails cleanly instead of throwing',
+     !shapes.empty.ok && !/undefined is not an object|out\.match/.test(shapes.empty.msg), shapes.empty.msg);
+  ok('and a reply with no text says so', !shapes.noText.ok && /no readable text/i.test(shapes.noText.msg),
+     shapes.noText.msg.slice(0,80));
+  ok('naming running out of room when that is why',
+     /ran out of room/i.test(shapes.noText.msg), shapes.noText.msg.slice(0,110));
+}
+
 console.log(`\n${fails===0?'✅':'❌'} ${fails===0?'all passed':fails+' failed'}`);
 await b.close(); srv.close(); process.exit(fails?1:0);
