@@ -196,6 +196,54 @@ console.log('\n━━ Battery saver is a separate setting and still works ━━
      !/Lite — battery/i.test(await p.content()));
 }
 
+
+/* ── The first screen stays a decision, not a briefing ─────────────────────
+   It opened with four sentences of prose: a tagline, a paragraph under each of the two
+   buttons, a footer about switching, and another about restoring. A newcomer choosing
+   between two things had to read ninety words to do it. Everything still exists behind the
+   "?" — the point is that none of it is in the way. */
+{
+  /* Its own context, not just a new page: the tests above configured the app, and storage
+     is shared across pages in one context — a "first run" sharing it is not a first run. */
+  const fresh = await b.newContext({ viewport:{width:390,height:900},
+    timezoneId:'America/Chicago', locale:'en-US' });
+  const p2 = await fresh.newPage();
+  await p2.goto('http://localhost:8213/'); await p2.waitForTimeout(700);
+  ok('this really is a first run', await p2.isVisible('#welcome'));
+  const seen = (sel) => p2.evaluate(s => { const e = document.querySelector(s);
+    return !!(e && e.offsetParent); }, sel);
+
+  const words = await p2.evaluate(() => {
+    const w = document.getElementById('welcome');
+    const help = w.querySelector('.wnote');
+    return w.innerText.replace(help ? help.innerText : '', '')
+            .trim().split(/\s+/).filter(Boolean).length;
+  });
+  ok('the choice is made in a handful of words', words <= 30, words + ' words');
+
+  /* The detail is not deleted — that would be worse. It is one tap away. */
+  ok('the detail is still reachable', await seen('#welcome .wnote'));
+  /* Opened the way a person opens it, rather than read out of the DOM — what is being
+     checked is that one tap gets you the whole explanation, not that the words exist
+     somewhere in the markup. */
+  await p2.click('#welcome .wnote > summary'); await p2.waitForTimeout(250);
+  const help = await p2.evaluate(() => document.querySelector('#welcome .wnote').innerText);
+  ok('and still explains both modes', /Lite/.test(help) && /Full/.test(help));
+  ok('that switching loses nothing', /never records less/i.test(help));
+  ok('and that the data stays put', /stays on this phone/i.test(help));
+
+  /* Sized to be read at arm's length: these two buttons are the whole screen. */
+  const size = await p2.evaluate(() => parseFloat(getComputedStyle(
+    document.querySelector('#wPick button b')).fontSize));
+  ok('the two options are set large', size >= 20, size + 'px');
+
+  /* Nothing above the decision competing with it. */
+  ok('no app header above it', !(await seen('#appHead')));
+  ok('and no tagline in the footer', !(await seen('#footNote')));
+  ok('but the build number is still findable', await seen('#appVer'));
+  await p2.close(); await fresh.close();
+}
+
 console.log(`\n${fails===0?'✅':'❌'}  ${fails===0?'all passed':fails+' failed'}`);
 await b.close(); srv.close();
 process.exit(fails===0?0:1);

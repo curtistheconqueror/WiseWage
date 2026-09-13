@@ -111,9 +111,12 @@ p = await boot(null);
 ok('a fresh copy opens at the welcome screen', await p.isVisible('#welcome'));
 ok('and offers restore right there', await p.isVisible('#wRestore'));
 {
-  const txt = await p.textContent('#welcomeRestore');
-  ok('worded for moving, not for setting up',
-     /already using|another|moved|phone/i.test(txt), txt);
+  /* It used to carry a sentence explaining itself. The label now does that job on its own,
+     which is the point — a newcomer choosing between two buttons should not have to read a
+     paragraph belonging to a third. What matters is that the route is present and says
+     plainly what it does. */
+  const txt = (await p.textContent('#wRestore')) || '';
+  ok('the route says plainly what it does', /restore/i.test(txt) && /backup/i.test(txt), txt.trim());
 }
 {
   /* The input sits outside every section on purpose. Were it still inside #cfg, this click

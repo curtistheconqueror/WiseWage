@@ -389,6 +389,11 @@
      question has not come up yet, and pre-answering it is what made this card look hard. */
   body.lite #monmoney, body.lite #monmoneyLbl{display:none!important}
   body.lite .helpnote{display:none!important}
+  /* Except while getting started. Hiding the explanations inside the app is the point of
+     Lite — those are notes about features a Lite user does not have. The one behind the
+     setup screen is the opposite: it answers "am I stuck with this?", which is the question
+     a newcomer has most, and Lite users are exactly who it is for. */
+  body.lite #setup .helpnote, body.lite #welcome .helpnote{display:block!important}
 
 
   /* ---- the scan review table ---- */
@@ -417,22 +422,32 @@
   #welcome{text-align:center;padding:34px 20px 26px}
   #welcome .wmark{width:96px;height:96px;border-radius:22px;display:block;margin:0 auto 18px;
     box-shadow:0 10px 30px rgba(0,0,0,.34)}
-  #welcome h1{font-size:27px;font-weight:800;letter-spacing:-.4px;margin:0 0 6px}
-  #welcome .wlead{color:var(--muted);font-size:13.6px;line-height:1.55;margin:0 auto 22px;max-width:330px}
+  #welcome h1{font-size:31px;font-weight:800;letter-spacing:-.5px;margin:0 0 8px}
+  #welcome .wlead{color:var(--muted);font-size:16px;line-height:1.5;margin:0 auto 26px;max-width:330px}
   .wpick{display:grid;gap:12px;text-align:left;max-width:420px;margin:0 auto}
-  .wpick button{cursor:pointer;font-family:inherit;text-align:left;padding:16px 17px;border-radius:15px;
+  /* The two choices are the whole screen, so they are sized like it. Bigger than any other
+     button in the app on purpose: this is the one decision a newcomer has to make, and it
+     should read at arm's length without anybody leaning in. */
+  .wpick button{cursor:pointer;font-family:inherit;text-align:left;padding:19px 20px;border-radius:16px;
     border:1px solid var(--line);background:rgba(10,16,32,.5);color:var(--fg);min-height:44px}
-  .wpick button b{display:block;font-size:15.5px;font-weight:800;margin-bottom:5px}
-  .wpick button span{display:block;color:var(--muted);font-size:12.8px;line-height:1.55}
+  .wpick button b{display:block;font-size:23px;font-weight:800;letter-spacing:-.2px;margin-bottom:4px}
+  .wpick button span{display:block;color:var(--muted);font-size:15px;line-height:1.45}
   .wpick button.rec{border-color:var(--ok);
     background:linear-gradient(180deg,rgba(81,224,138,.15),rgba(81,224,138,.03))}
-  .wpick .wtag{display:inline-block;font-size:10.4px;font-weight:800;letter-spacing:1.3px;
-    text-transform:uppercase;color:var(--ok);margin-bottom:7px}
-  #welcome .wfoot{margin-top:20px;color:var(--muted);font-size:12.2px;line-height:1.6}
+  .wpick .wtag{display:inline-block;font-size:11px;font-weight:800;letter-spacing:1.3px;
+    text-transform:uppercase;color:var(--ok);margin-bottom:8px}
+  /* Restore is for the minority who already have data, so it is present and quiet rather
+     than competing with the choice above it. */
+  .wrestore{margin-top:20px}
+  /* The help sits under the decision, centred with it, and carries no top rule — on this
+     screen there is nothing above it that it is separating from. */
+  #welcome .wnote{max-width:420px;margin:22px auto 0;border-top:0;padding-top:0;text-align:left}
+  #welcome .wnote>summary{justify-content:center}
+  #welcome .wnote .helpnotebody{text-align:left}
   /* .confirm is red by default because it normally guards something destructive. Restoring
      a backup is the opposite — it is the good path for someone moving phones — and a red
      box on the first screen reads as an error before it is read as an offer. */
-  #welcomeRestore, #setupRestore{border-color:var(--line);background:rgba(10,16,32,.5)}
+  #setupRestore{border-color:var(--line);background:rgba(10,16,32,.5)}
   .bankdot.carried{opacity:.55;border-style:dashed}
   .forgot{margin:12px 0 4px;padding:12px 14px;border-radius:14px;
     background:color-mix(in srgb,var(--warn,#e8a33d) 14%,transparent);
@@ -1096,7 +1111,9 @@
        release exists to fix. -->
   <header id="appHead">
     <h1>WiseWage</h1>
-    <div class="sub"><span class="was">Pay Clock</span> · Clock in and watch it earn — second by second, straight time into overtime.</div>
+    <!-- Hidden until setup is done. It is a description of the app for somebody already
+         using it; on the setup screen it is two lines of prose above the first question. -->
+    <div class="sub" id="appSub"><span class="was">Pay Clock</span> · Clock in and watch it earn — second by second, straight time into overtime.</div>
   </header>
 
   <!-- ================= FIRST RUN ================= -->
@@ -1119,42 +1136,50 @@
       <g transform="translate(33.2,43) scale(0.6) translate(-50,-50)"><path d="M 2,16 L 24,16 L 36,66 L 46,32 L 54,32 L 64,66 L 76,16 L 98,16 L 72,84 L 60,84 L 50,54 L 40,84 L 28,84 Z" fill="#ffffff" stroke="#ffffff" stroke-width="5" stroke-linejoin="miter" stroke-miterlimit="8"/><path d="M 2,16 L 24,16 L 36,66 L 46,32 L 54,32 L 64,66 L 76,16 L 98,16 L 72,84 L 60,84 L 50,54 L 40,84 L 28,84 Z" fill="#12823f" stroke-linejoin="miter" stroke-miterlimit="8"/></g>
     </svg>
     <h1>WiseWage</h1>
-    <p class="wlead">Clock in and watch your pay add up, second by second — straight time
-    into overtime. Everything stays on this phone.</p>
+    <p class="wlead">Clock in. Watch it add up.</p>
     <div class="wpick" id="wPick">
       <button data-mode="lite" class="rec">
         <span class="wtag">Start here</span>
         <b>Lite</b>
-        <span>Three questions and you are tracking. The clock, what you have earned, your
-        pay period and your shifts — nothing else on screen.</span>
+        <span>Three questions.</span>
       </button>
       <button data-mode="full">
         <b>Full</b>
-        <span>Everything: contract terms, paid holidays, days off, year to date, overtime
-        outlook, production work and printable time sheets. More setup up front.</span>
+        <span>Everything, more setup.</span>
       </button>
     </div>
-    <div class="wfoot">You can switch between the two whenever you like, in Settings.
-    Nothing is lost either way — Lite only shows less, it never records less.</div>
-    <!-- Somebody arriving with a backup is not choosing a mode, they are moving in. This has
-         to be reachable from the very first screen, because restore lives in Settings and
-         Settings does not exist until setup is finished. -->
-    <div class="confirm" id="welcomeRestore" style="margin-top:18px">
-      <span>Already using WiseWage somewhere else?</span>
+    <div class="wrestore">
       <button class="mini" id="wRestore">⇧ Restore from a backup</button>
     </div>
+    <!-- Everything that used to sit on this screen as prose. A newcomer deciding between
+         two buttons does not need four sentences to do it, and a paragraph under a button
+         reads as work before anything has begun. It is all still here for anyone who wants
+         it — one tap away, below the fold of the decision rather than above it. -->
+    <details class="helpnote wnote">
+      <summary>What is the difference?</summary>
+      <div class="helpnotebody">
+        <p><b>Lite</b> — the clock, your earnings, your pay period and your shifts.</p>
+        <p><b>Full</b> — adds contract terms, paid holidays, days off, year to date,
+        overtime outlook and printable time sheets.</p>
+        <p>Switch between them any time in Settings. Lite only shows less; it never
+        records less.</p>
+        <p>Everything stays on this phone. Nothing is sent anywhere.</p>
+      </div>
+    </details>
   </section>
 
   <section class="card hide" id="setup">
     <h2>Set up your clock</h2>
-    <p class="slead" id="setupLead">Two minutes now and it runs itself from here. Everything stays in this browser — nothing is sent anywhere.</p>
+    <p class="slead" id="setupLead">Two minutes, then it runs itself.</p>
     <!-- Somebody arriving with a backup is not setting up, they are moving in. Because everything
          lives in this browser, changing phone or address looks exactly like a first run, and the
          restore button lives in settings, which is hidden until setup is finished. Without this
          they would have to answer a page of questions the restore then overwrites — and anyone
          who did not know that would sit and retype a year of history by hand. -->
-    <div class="confirm" id="setupRestore" style="margin-bottom:14px">
-      <span>Moved from another phone or address? Bring your history across instead.</span>
+    <!-- A second chance at restore, for somebody who picked a mode and only then remembered
+         they have a backup. The welcome screen already made the offer in words; repeating
+         them here is a sentence between a newcomer and the first field. -->
+    <div class="confirm" id="setupRestore" style="margin-bottom:14px;justify-content:flex-start">
       <button class="mini" id="sRestore">⇧ Restore from a backup</button>
     </div>
     <div class="sgrid">
@@ -1263,9 +1288,15 @@
     <div class="epreview" id="sPreview"></div>
     <div class="eerr hide" id="sErr"></div>
     <div class="eactions"><button class="btn go" id="sSave">Start tracking</button></div>
-    <div class="note" style="margin-top:11px">Every one of these is in Settings afterwards, and
-    changing one there updates everything that depends on it. Nothing here is a decision you
-    are stuck with.</div>
+    <!-- The reassurance somebody wants BEFORE committing, but not as a paragraph under the
+         button they are about to press. One tap, for whoever hesitates. -->
+    <details class="helpnote">
+      <summary>Am I stuck with these answers?</summary>
+      <div class="helpnotebody">
+        <p>No. Every one of these is in Settings afterwards, and changing one there updates
+        everything that depends on it.</p>
+      </div>
+    </details>
   </section>
 
   <!-- ================= HERO ================= -->
@@ -2713,7 +2744,11 @@
     </details>
   </section>
 
-  <div class="foot">Single file · no server · works offline · data lives in this browser only.
+  <!-- The tagline is hidden on the welcome screen: it says what the help behind the "?"
+       already says, and on the one screen that has to be a single clear decision it is one
+       more line of prose. The build number stays, on every screen — it is how anybody
+       answers "am I actually running the new version?" without guessing. -->
+  <div class="foot"><span id="footNote">Single file · no server · works offline · data lives in this browser only.</span>
     <span class="ver" id="appVer"></span></div>
 </div>
 
@@ -5904,7 +5939,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v85';
+var APP_BUILD = 'v86';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -8209,6 +8244,8 @@ function applyStage(){
   syncSheetControls();
   show('welcome', greet);
   show('appHead', !greet);
+  show('footNote', !greet);
+  show('appSub', !first);
   show('setup', first && !greet);
   /* Every card in the app proper, not the six this used to name. The other eight were
      never hidden during first run, so the welcome and setup screens had Floaters & sick
@@ -8239,10 +8276,12 @@ function applyStage(){
       el('sHolPreset').value = 'none';
       setupHolidays = [];
     }
+    /* The screen already shows how many questions there are. Saying it again in a sentence
+       above them is a line a newcomer reads before finding out it told them nothing. */
     var lead = el('setupLead');
     if (lead) lead.textContent = appMode() === 'lite'
-      ? 'Three questions and you are tracking. Everything else takes a sensible default you can change later.'
-      : 'Two minutes now and it runs itself from here. Everything stays in this browser — nothing is sent anywhere.';
+      ? 'Three questions.'
+      : 'Two minutes, then it runs itself.';
     paintSetupDays();
     paintSetupHolidays();
     paintSetupBanks();
