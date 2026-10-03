@@ -133,6 +133,12 @@ console.log('\nClock out banks the shift');
    reading the figure in one call and clocking out in the next compares two moments and
    fails by exactly the time between them. */
 const bankedPay = await page.evaluate(() => {
+  /* Repaint FIRST. #money carries whatever the last tick drew, and the ticker runs once a
+     second — so under load the text on screen can be seconds behind the clock, while
+     clocking out prices the real moment. Reading one and banking the other then differs by
+     however far behind the paint had fallen: it passed on an idle machine and failed on a
+     busy one, by a couple of cents, looking exactly like a rounding bug in the money. */
+  render();
   const v = parseFloat(document.querySelector('#money').textContent.replace(/[$,]/g, ''));
   document.querySelector('#punch').click();
   return v;

@@ -178,8 +178,14 @@ await boot('2026-07-30T13:00:00Z', st({sessions:[{id:'k',start:jul(27,9),end:jul
 await page.evaluate(()=>{document.querySelectorAll('#cfg details').forEach(d=>d.open=true)}); await page.waitForTimeout(150);
 const dl=await Promise.all([page.waitForEvent('download'),page.click('#backup')]).then(r=>r[0]);
 await dl.saveAs(join(TMP, 'smoke-backup.json'));
+/* Arming and confirming used to be the same pixel, so an ordinary double-tap wiped
+   everything. The confirm is a separate control now; tapping the first one twice must do
+   nothing but ask. */
 await page.click('#wipe'); await page.waitForTimeout(150);
-await page.click('#wipe'); await page.waitForTimeout(400);
+await page.click('#wipe'); await page.waitForTimeout(150);
+ok('a double-tap only asks', await page.isVisible('#wipeConfirm'));
+ok('and erases nothing by itself', (await page.evaluate(()=>state.sessions.length)) > 0);
+await page.click('#wipeYes'); await page.waitForTimeout(400);
 /* Erase clears the stored Lite/Full choice along with everything else, so it lands all the
    way back at the welcome screen rather than at setup — which is what erasing should mean. */
 ok('erase returns to the very beginning', await page.isVisible('#welcome'));

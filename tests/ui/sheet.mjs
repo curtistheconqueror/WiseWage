@@ -191,11 +191,22 @@ p=await boot(mob);
 {
   const sw=await p.evaluate(()=>[document.documentElement.scrollWidth,window.innerWidth]);
   ok('no sideways scroll', sw[0]===sw[1], sw.join(' vs '));
+  /* Checkboxes are measured by the label that wraps them, not by the 16px box — clicking
+     the label toggles it, so the label is the target. That is the rule the smoke suite
+     already applies app-wide; this card was asserting something stricter and different,
+     which is how a checkbox with a perfectly good 44px label got reported as a 22px
+     control. Both halves are checked below rather than one being waived. */
   const small=await p.evaluate(()=>[...document.querySelectorAll('#sheet button,#sheet input,#sheet select')]
-    .filter(x=>x.offsetParent!==null && x.type!=='file')
+    .filter(x=>x.offsetParent!==null && x.type!=='file' && x.type!=='checkbox')
     .filter(x=>x.getBoundingClientRect().height<44)
     .map(x=>(x.id||x.className)+':'+Math.round(x.getBoundingClientRect().height)));
   ok('every control in the card meets the 44px minimum', small.length===0, small.join(', '));
+  const boxes=await p.evaluate(()=>[...document.querySelectorAll('#sheet input[type=checkbox]')]
+    .filter(x=>x.offsetParent!==null)
+    .map(x=>{ const l=x.closest('label');
+              return (x.id)+':'+Math.round((l||x).getBoundingClientRect().height); })
+    .filter(s=>+s.split(':')[1] < 44));
+  ok('and every checkbox has a label big enough to hit', boxes.length===0, boxes.join(', '));
   const cv=await p.locator('#shSig').boundingBox();
   ok('the signature pad fits the screen', cv && cv.x>=0 && cv.x+cv.width<=390, JSON.stringify(cv));
 }

@@ -204,6 +204,67 @@ ok('no sideways scroll', m.w<=m.win+1, `${m.w} vs ${m.win}`);
 ok('every field is tappable', m.f.every(x=>x.h>=40), JSON.stringify(m.f));
 ok('and none makes iOS zoom', m.f.every(x=>x.fs>=16), JSON.stringify(m.f));
 
+
+/* ── A fortnight off, reported as a fortnight off ──────────────────────────
+   A whole pay period of vacation, which is the shape that exposed the bug: paid leave sits
+   inside regHours because it is straight time, and only HOLIDAY was being carved back out
+   again. So two weeks nobody worked were reported as "80.00 h reg" — eighty hours at the
+   clock, on a screen whose whole job is to say what you earned and why. */
+console.log('\n━━ A whole period of vacation says so ━━');
+{
+  const ctxV = await b.newContext({ viewport:{width:390,height:1400},
+    timezoneId:'America/Chicago', locale:'en-US' });
+  const pv = await ctxV.newPage();
+  pv.on('pageerror', e => { console.log('  PAGE ERROR:', e.message); fails++; });
+  await pv.clock.install({ time: new Date(2026, 9, 3, 12, 0) });     // Sat Oct 3 2026
+  await pv.addInitScript(() => { if (sessionStorage.__s) return; sessionStorage.__s = 1;
+    localStorage.setItem('payclock.v1', JSON.stringify({ configured:true, mode:'full',
+      cfg:{ rate:37.78, otMode:'eight40', schedStart:'14:00', schedEnd:'22:30', lunchMins:30,
+            workDays:[true,true,true,true,true,false,false],        // Sun-Thu
+            periodAnchor:'2026-09-06', periodLengthDays:14, payDateOffsetDays:13,
+            holidays:[], banks:[], daysOff:[],
+            vacations:[{ id:'v1', name:'Vacation', from:'2026-09-20', to:'2026-10-03', hours:8 }] },
+      sessions:[], activeStart:null, sound:false, ui:{open:{calc:true}} }));
+  });
+  await pv.goto('http://localhost:8153/'); await pv.waitForTimeout(1000);
+  await pv.evaluate(() => { document.querySelectorAll('.col').forEach(c => c.classList.add('open'));
+                            drawCal(true); });
+  await pv.waitForTimeout(600);
+
+  /* Rostered days only. Sep 20-24 and Sep 27-Oct 1; the Fridays and Saturdays inside the
+     block pay nothing, because a vacation does not invent shifts that never existed. */
+  const credits = await pv.evaluate(() => vacationCredits(state.cfg).length);
+  ok('ten rostered days inside the fortnight', credits === 10, String(credits));
+
+  const tile = (await pv.textContent('#pDet')).replace(/\s+/g, ' ');
+  ok('the period tile names it as vacation', /vacation/i.test(tile), tile.trim());
+  ok('and gives the hours', /80\.00 h vacation/.test(tile), tile.trim());
+  /* The bug: eighty hours of leave reported as eighty hours at the clock. */
+  ok('without claiming any of it was worked', !/\b80\.00 h reg\b/.test(tile), tile.trim());
+
+  const week = (await pv.textContent('#wDet')).replace(/\s+/g, ' ');
+  ok('the week tile says vacation too', /vacation/i.test(week), week.trim());
+
+  const marked = await pv.evaluate(() =>
+    [...document.querySelectorAll('.calcell.vac')].map(c => c.dataset.d));
+  ok('the calendar marks every rostered day', marked.length === 10, String(marked.length));
+  ok('starting the Sunday it began', marked.indexOf('2026-09-20') > -1, marked.join(' '));
+  ok('and ending the Thursday it ran out', marked.indexOf('2026-10-01') > -1);
+  ok('leaving the unrostered days alone', marked.indexOf('2026-09-25') < 0
+     && marked.indexOf('2026-09-26') < 0, marked.join(' '));
+
+  const log = await pv.evaluate(() =>
+    [...document.querySelectorAll('#logBody tbody tr')].map(r => r.innerText).join(' | '));
+  ok('and the shift log calls each one a vacation', /VACATION/.test(log));
+
+  /* Leave is flat by default: a fortnight off must not manufacture overtime. */
+  const ot = await pv.evaluate(() => {
+    const pi = periodInfo(Date.now(), state.cfg);
+    return sumRange(jobLedger(null, state.cfg, Date.now()).parts, pi.start, pi.end).otHours; });
+  ok('with no overtime invented by it', ot === 0, String(ot));
+  await pv.close(); await ctxV.close();
+}
+
 console.log(`\n${fails===0?'✅':'❌'}  ${fails===0?'all passed':fails+' failed'}`);
 await b.close(); srv.close();
 process.exit(fails===0?0:1);

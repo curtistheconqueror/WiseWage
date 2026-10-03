@@ -110,6 +110,11 @@ a machine report contention as failure.
 
 Set `PW_CHROME` to use a particular browser build rather than Playwright's own.
 
+## Picking this up
+
+`HANDOFF.md` is the current state and the road ahead — read it first.
+`PLAN.md` is the professions / multi-job architecture.
+
 ## Files
 
 | | |

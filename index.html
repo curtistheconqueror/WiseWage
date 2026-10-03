@@ -393,7 +393,8 @@
      Lite — those are notes about features a Lite user does not have. The one behind the
      setup screen is the opposite: it answers "am I stuck with this?", which is the question
      a newcomer has most, and Lite users are exactly who it is for. */
-  body.lite #setup .helpnote, body.lite #welcome .helpnote{display:block!important}
+  body.lite #setup .helpnote, body.lite #welcome .helpnote,
+  body.lite #cfg .helpnote{display:block!important}
 
 
   /* ---- the scan review table ---- */
@@ -609,7 +610,10 @@
   #scanNotes{width:100%;resize:vertical}
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 2px rgba(53,208,224,.16)}
   input[type=number]{width:80px}
-  .swrap{display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none}
+  /* The whole label is the target, not the 16px box inside it, so it clears 44px on a
+     phone without drawing a checkbox the size of a thumbnail. */
+  .swrap{display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none;
+    min-height:44px}
   .swrap input{accent-color:var(--acc);width:16px;height:16px;cursor:pointer}
   .eta{color:var(--acc);font-weight:700}
   /* which days auto clock-in is allowed to fire on — only shown once it is switched on */
@@ -870,8 +874,11 @@
   tr.vacrowlog td{background:rgba(183,140,255,.08)}
   .calcell.vac{background:rgba(183,140,255,.16)}
   .calcell.vac .dnum{color:var(--acc2);font-weight:800}
-  .calcell .vacdot{position:absolute;bottom:2px;right:3px;width:5px;height:5px;border-radius:50%;
-    background:var(--acc2);pointer-events:none;z-index:2}
+  /* A letter rather than a dot. Three kinds of marked day on one small grid, and three
+     coloured dots make somebody learn a colour key to read their own month; a "v" says
+     which it is without being looked up. */
+  .calcell .vacdot{position:absolute;bottom:1px;right:3px;pointer-events:none;z-index:2;
+    font-size:9px;font-weight:800;line-height:1;color:var(--acc2);letter-spacing:0}
   .vaccfg{border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:9px;
     display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
   .vaccfg .vwhen{font-weight:800}
@@ -1842,7 +1849,7 @@
 
   <!-- ================= PAID DAYS OFF ================= -->
   <section class="card col" id="banks">
-    <h2>Floaters &amp; sick days<span class="colsum" id="sum_banks"></span></h2>
+    <h2>Paid days off<span class="colsum" id="sum_banks"></span></h2>
     <div class="colbody">
     <div class="note" style="margin-bottom:12px">Days you spend rather than days that arrive.
     Book one against any date — including one still to come — and it lands in that date's pay
@@ -1993,15 +2000,17 @@
   <section class="card col fullonly" id="sheet">
     <h2>Custom data — time sheet<span class="colsum" id="sum_sheet"></span></h2>
     <div class="colbody">
-      <div class="note">A daily sign-in sheet, filled in from the log. Punch (or add shifts to
-      the log) as normal; every row, name and initial is placed for you, and the finished
-      sheet prints or exports when it is due. Times here are premises time — first in to last
-      out, nothing deducted — because that is what a sign-in sheet legally records.</div>
+      <div class="note">A daily sign-in sheet, filled in from your log.</div>
       <div class="sgrid" style="margin-top:12px">
         <div class="f"><label for="shName">Name as it appears on the sheet</label>
           <input type="text" id="shName" autocomplete="name" placeholder="Your name"></div>
         <div class="f"><label for="shInit">Initials</label>
           <input type="text" id="shInit" maxlength="5" placeholder="e.g. CW" style="max-width:110px"></div>
+        <!-- Replaces a sentence explaining that initials are placed for you. Some sheets are
+             signed line by line and some once at the bottom; which one yours is was never a
+             thing to be told, it was a thing to choose. -->
+        <div class="f"><label class="swrap"><input type="checkbox" id="shInitEvery" checked>
+          Initial every worked row</label></div>
         <div class="f"><label for="shDept">Department / division</label>
           <input type="text" id="shDept" placeholder="e.g. South"></div>
         <div class="f"><label for="shSect">Section</label>
@@ -2256,13 +2265,7 @@
       <details class="cfgsec fullonly" id="gJobs">
         <summary><span class="cfgt">Jobs</span><span class="cfgsum" id="sumJobs"></span></summary>
         <div class="cfgbody">
-      <div class="f" style="margin-top:0"><label>Where you work</label>
-        <div class="note">A second job is a whole separate set of terms — its own rate,
-        schedule, overtime rule, holidays and differentials — so each one keeps its own
-        settings and its own clock. Overtime is never combined across employers: forty hours
-        at one and ten at another is fifty straight hours, not ten of overtime. Tax is the
-        part that combines, because it is charged to you rather than to them.</div>
-      </div>
+      <div class="f" style="margin-top:0"><label>Where you work</label></div>
       <div id="jobList"></div>
       <div class="actions" style="justify-content:flex-start;margin-top:10px">
         <button class="mini" id="jobAdd">+ Add another job</button>
@@ -2546,15 +2549,8 @@
           <option value="none">None — clear the list</option>
         </select>
       </div>
-      <div class="note" style="margin-top:6px">A standard set replaces whatever is listed now.
-      Federal is what the Postal Service and most federal employers observe. Anything your
-      contract adds — Good Friday, the day after Thanksgiving, your own — you add above.</div>
-      <div class="f" style="margin-top:18px"><label>Paid days off you are given</label>
-        <div class="note">Allowances you spend rather than days that arrive — floating
-        holidays, sick days, personal days, whatever your contract calls them. Set how many
-        a year, what each is worth, and whether they count toward overtime. Name them
-        individually if it helps to know which you have left.</div>
-      </div>
+      <div class="note" style="margin-top:6px">Replaces the list above.</div>
+      <div class="f" style="margin-top:18px"><label>Paid days off</label></div>
       <div id="cBankList"></div>
       <div class="actions" style="justify-content:flex-start;margin-top:10px">
         <!-- Options are built from BANK_KINDS at boot so the list here cannot drift from the
@@ -2563,10 +2559,6 @@
         <button class="mini danger" id="cBankReset">↺ Remove all</button>
       </div>
       <div class="f" style="margin-top:18px"><label>Vacation</label>
-        <div class="note">A block of dates rather than days you spend one at a time. Every day
-        inside it that you were rostered for pays flat; days you were not rostered for pay
-        nothing, because a vacation does not invent shifts you never had. It shows on the
-        calendar and in the shift log, and you are never asked to make the hours up.</div>
       </div>
       <div id="cVacList"></div>
       <div class="actions" style="justify-content:flex-start;margin-top:10px">
@@ -2741,6 +2733,15 @@
         <button class="mini" id="backup">⇩ Save a backup</button>
         <button class="mini" id="restore">⇧ Restore from backup</button>
         <button class="mini danger" id="wipe">Erase all data</button>
+      </div>
+      <!-- Arming and confirming used to be the same 135x44 target, so an ordinary
+           double-tap — which iOS Safari also generates from a double-tap-to-zoom — wiped
+           every shift and setting with no undo. The confirm is now somewhere else entirely,
+           matching how clearing a period already works. -->
+      <div class="confirm hide" id="wipeConfirm" style="margin-top:10px">
+        <span>Erase every shift, setting and backup on this device? This cannot be undone.</span>
+        <button class="mini danger" id="wipeYes">Yes, erase everything</button>
+        <button class="mini" id="wipeNo">Keep my data</button>
       </div>
       <!-- An app cached for offline use can end up serving an old copy of itself, and no
            amount of closing and reopening shifts it — the cached copy is what answers every
@@ -3367,7 +3368,8 @@ function sumRange(parts, fromMs, toMs){
      straight time, so it is already counted there. They exist so a total can say which
      part of it was worked and which arrived. */
   var t = { hours: 0, regHours: 0, otHours: 0, qualOt: 0, gross: 0,
-            holHours: 0, holGross: 0, leaveHours: 0 };
+            holHours: 0, holGross: 0, vacHours: 0, vacGross: 0,
+            offHours: 0, offGross: 0, leaveHours: 0 };
   for (var i = 0; i < parts.length; i++){
     var p = parts[i];
     if (p.start >= fromMs && p.end <= toMs){
@@ -3375,7 +3377,12 @@ function sumRange(parts, fromMs, toMs){
       t.qualOt += (p.qualOt || 0); t.gross += p.gross;
       if (p.leave){
         t.leaveHours += p.hours;
+        /* Every kind separately, not just holidays. A fortnight of vacation used to land
+           in regHours with nothing to distinguish it, so the screen read eighty hours of
+           ordinary work for a period nobody worked at all. */
         if (p.leave === 'hol'){ t.holHours += p.hours; t.holGross += p.gross; }
+        else if (p.leave === 'vac'){ t.vacHours += p.hours; t.vacGross += p.gross; }
+        else { t.offHours += p.hours; t.offGross += p.gross; }
       }
     }
   }
@@ -5958,7 +5965,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v87';
+var APP_BUILD = 'v89';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -6694,8 +6701,9 @@ function renderHolidayList(){
   }).join('') : '<div class="holnone">No paid holidays. Add one, or put the standard six back.</div>';
 }
 
-/* The editor. `holEditing` is the index being changed, or -1 for a new one. */
-var holEditing = -1;
+/* The editor. `holEditing` is the id of the holiday being changed, or null for a new one.
+   It used to be an array index, which a delete or a preset change silently invalidated. */
+var holEditing = null;
 function fillHolSelects(){
   var m = el('hMonth'), w = el('hDow');
   if (m.options.length) return;
@@ -6727,10 +6735,13 @@ function paintHolPreview(){
   el('hPreview').innerHTML = '<b>' + esc(h.name || 'Untitled') + '</b> — ' + esc(holidayRuleText(h))
     + '<br><span style="color:var(--muted)">' + lines.join(' &nbsp;·&nbsp; ') + '</span>';
 }
+/* Keyed by the holiday's own id, never by its position. The editor stayed open across a
+   delete and across a preset change, both of which reshuffle the array — so saving wrote
+   the edit over whichever holiday had slid into that slot, and said "Holiday updated." */
 function openHolEditor(i){
   fillHolSelects();
-  holEditing = i;
   var h = i >= 0 ? state.cfg.holidays[i] : null;
+  holEditing = h ? h.id : null;
   el('holTitle').textContent = h ? 'Edit ' + h.name : 'Add a holiday';
   var r = (h && h.rule) || { kind: 'md', month: new Date().getMonth(), day: new Date().getDate() };
   el('hName').value = h ? h.name : '';
@@ -6756,15 +6767,26 @@ function saveHoliday(){
     el('hErr').textContent = 'That date does not exist in every month.'; show('hErr', true); return;
   }
   var list = state.cfg.holidays || (state.cfg.holidays = []);
-  if (holEditing >= 0 && list[holEditing]){
-    list[holEditing] = Object.assign({}, list[holEditing], h);
+  var at = -1;
+  if (holEditing != null){
+    for (var hi = 0; hi < list.length; hi++){ if (list[hi].id === holEditing){ at = hi; break; } }
+  }
+  if (at >= 0){
+    list[at] = Object.assign({}, list[at], h);
+  } else if (holEditing != null){
+    /* It was deleted while the editor was open. Adding it back silently would be a
+       surprise; saying so is the honest answer. */
+    show('holEdit', false); holEditing = null;
+    toast('That holiday was removed while you were editing it.');
+    renderHolidayList(); drawCal(true); render();
+    return;
   } else {
     list.push(Object.assign({ id: uid(), on: true }, h));
   }
   show('holEdit', false);
   save(); renderHolidayList(); drawCal(true); render();
-  toast(holEditing >= 0 ? 'Holiday updated.' : 'Holiday added.');
-  holEditing = -1;
+  toast(holEditing != null ? 'Holiday updated.' : 'Holiday added.');
+  holEditing = null;
 }
 
 /* ---- auto clock-in ----
@@ -7109,13 +7131,19 @@ function render(){
      indistinguishable from hours worked — a week with a paid holiday in it simply read
      eight hours heavier with nothing saying why. Carved out onto a line of its own. */
   function det(t){
-    var hol = t.holHours || 0;
-    var worked = Math.max(0, t.regHours - hol);
+    var hol = t.holHours || 0, vac = t.vacHours || 0, off = t.offHours || 0;
+    /* Every hour that ARRIVED comes out of the hours WORKED. Subtracting only holidays
+       meant a fortnight of vacation was reported as a fortnight at the clock. */
+    var worked = Math.max(0, t.regHours - hol - vac - off);
+    var leaveLine = function(h, label){
+      return h > 0.0001 ? '<br><span class="holline">' + h.toFixed(2) + ' h ' + label
+                          + ' @ ' + money(cfg.rate) + '</span>' : '';
+    };
     return hrs(t.hours) + (t.otHours > 0.0001
       ? ' &nbsp;·&nbsp; <span class="ot">' + t.otHours.toFixed(2) + ' h OT</span>' : '')
-      + '<br>' + worked.toFixed(2) + ' h reg @ ' + money(cfg.rate)
-      + (hol > 0.0001 ? '<br><span class="holline">' + hol.toFixed(2) + ' h holiday @ '
-                        + money(cfg.rate) + '</span>' : '')
+      + (worked > 0.0001 || (!hol && !vac && !off)
+         ? '<br>' + worked.toFixed(2) + ' h reg @ ' + money(cfg.rate) : '')
+      + leaveLine(hol, 'holiday') + leaveLine(vac, 'vacation') + leaveLine(off, 'paid day off')
       + (t.otHours > 0.0001 ? '<br>' + t.otHours.toFixed(2) + ' h OT @ ' + money(ledger.otRate) : '');
   }
   /* Named, because a night shift makes "Today" mean the day the shift belongs to rather
@@ -7837,8 +7865,11 @@ function renderTimeCard(ledger, now){
   var offNames = [];
   for (var i = 0; i < 7; i++) if (!isWorkDay(cfg, i)) offNames.push(DOW[i]);
   el('tcSched').innerHTML = (ss == null || se == null)
-    ? 'Set your scheduled start and end in the Decimal Time Conversion section and the '
-      + 'early/late columns fill in.'
+    /* Used to say "in the Decimal Time Conversion section". The fields were taken out of
+       that card and replaced with a read-only box, so this sent people to look for a
+       control that is not there any more. */
+    ? 'Set your scheduled shift in Settings \u2192 Your schedule and the early/late '
+      + 'columns fill in.'
     : 'Scheduled ' + ftime(day0 + ss * 60000) + ' – ' + ftime(day0 + se * 60000 + (se <= ss ? DAY_MS : 0))
       + '. ' + (offNames.length
           ? '<b style="color:var(--warn)">' + offNames.join(' and ') + '</b> are not scheduled days, '
@@ -8834,7 +8865,7 @@ function buildMonth(y, m){
       + (off ? ' data-off="' + esc(off) + '"' : '') + '>'
       + (hol ? '<span class="holdot"></span>' : '')
       + (off ? '<span class="offdot"></span>' : '')
-      + (vac ? '<span class="vacdot"></span>' : '')
+      + (vac ? '<span class="vacdot">v</span>' : '')
       + '<span class="dnum">' + d + '</span>'
       + '<input type="number" min="0" max="24" step="0.25" inputmode="decimal" data-d="' + k + '"'
       + ' value="' + (cc.hours[k] || '') + '" aria-label="Hours worked ' + k + '">'
@@ -9738,8 +9769,12 @@ function openEditor(id){
   el('eKind').value = kindOfAdj(s && s.adj);
   el('eNoLunch').checked = !!(s && s.adj && s.adj.noLunch);
   show('fNoLunch', (state.cfg.lunchMins || 0) > 0);
-  if (s && s.adj && s.adj.diff) el('eDiff').value = s.adj.diff;
-  if (s && s.adj && s.adj.mult) el('eMult').value = s.adj.mult;
+  /* Set every time, not only when the shift already carries one. These fields are hidden
+     until a kind is picked, so leaving them alone meant the LAST shift's differential sat
+     waiting in the DOM — mark an ordinary shift as a night shift and it silently inherited
+     $9.75/h from whatever you edited before, with nothing on screen to say so. */
+  el('eDiff').value = (s && s.adj && s.adj.diff) ? s.adj.diff : 2.00;
+  el('eMult').value = (s && s.adj && s.adj.mult) ? s.adj.mult : 1.5;
   syncKindFields();
   if (s){
     setMode('times');
@@ -10082,6 +10117,7 @@ document.getElementById('cHolList').addEventListener('click', function(e){
     var i = +b.dataset.hdel, h = state.cfg.holidays[i];
     if (!h) return;
     state.cfg.holidays.splice(i, 1);
+    if (holEditing === h.id){ show('holEdit', false); holEditing = null; }
     save(); renderHolidayList(); drawCal(true); render();
     toast('Removed ' + h.name + '.');
   }
@@ -11321,14 +11357,10 @@ document.getElementById('clearYes').onclick = function(){
   show('clearConfirm', false); show('logActions', true);
   save(); render(); toast('Period cleared.');
 };
-document.getElementById('wipe').onclick = function(){
-  var b = document.getElementById('wipe');
-  if (b.dataset.armed !== '1'){                       // click once to arm, again to confirm
-    b.dataset.armed = '1'; b.textContent = 'Tap again to erase everything';
-    setTimeout(function(){ b.dataset.armed = ''; b.textContent = 'Erase all data'; }, 5000);
-    return;
-  }
-  b.dataset.armed = ''; b.textContent = 'Erase all data';
+document.getElementById('wipe').onclick = function(){ show('wipeConfirm', true); };
+document.getElementById('wipeNo').onclick = function(){ show('wipeConfirm', false); };
+document.getElementById('wipeYes').onclick = function(){
+  show('wipeConfirm', false);
   localStorage.removeItem(KEY); state = load(); syncControls(); applyStage(); render();
   toast('All data erased.');
 };
@@ -12915,12 +12947,21 @@ function sheetCfg(){
 function SHEET_FIELDS(){
   return [['shName','name'],['shInit','init'],['shDept','dept'],['shSect','sect'],['shTitle','title']];
 }
+/* Whether each worked row carries initials, or the sheet is signed once at the bottom.
+   Defaults to on, which is what it did before this was a choice, so nobody's sheet changes
+   shape underneath them. */
+function sheetInitEvery(){
+  var sc = state.cfg.sheet || {};
+  return sc.initEvery !== false;
+}
 function syncSheetControls(){
   var sc = state.configured ? sheetCfg() : null;
   SHEET_FIELDS().forEach(function(f){
     var e = document.getElementById(f[0]);
     if (e && sc && e.value !== (sc[f[1]] || '')) e.value = sc[f[1]] || '';
   });
+  var ie = document.getElementById('shInitEvery');
+  if (ie && sc) ie.checked = sc.initEvery !== false;
   sheetSigRestore();
   sheetPick = null;                 // job switch: back to the current period
   lastSheetSig = '';
@@ -12931,6 +12972,10 @@ SHEET_FIELDS().forEach(function(f){
     sheetCfg()[f[1]] = e.target.value;
     save();
   });
+});
+document.getElementById('shInitEvery').addEventListener('change', function(e){
+  sheetCfg().initEvery = e.target.checked;
+  save(); lastSheetSig = ''; renderSheet();
 });
 
 /* ---- the signature, drawn once ----
@@ -13022,7 +13067,8 @@ function renderSheet(now){
   pickEl.value = String(sheetPick);
 
   var sc = sheetCfg();
-  var sig = state.activeJob + '|' + sheetPick + '|' + dataVer + '|' + sc.init + '|' + sc.name;
+  var sig = state.activeJob + '|' + sheetPick + '|' + dataVer + '|' + sc.init + '|' + sc.name
+          + '|' + (sheetInitEvery() ? 1 : 0);
   if (sig === lastSheetSig) return;
   lastSheetSig = sig;
 
@@ -13037,7 +13083,7 @@ function renderSheet(now){
           return '<tr' + (worked ? '' : ' class="blank"') + '><td>' + fdate(new Date(d.dayMs)) + '</td>'
             + '<td>' + fmtSheetTime(d.inMs) + '</td><td>' + fmtSheetTime(d.outMs) + '</td>'
             + '<td class="num">' + (worked ? d.hours.toFixed(2) : '') + '</td>'
-            + '<td>' + (worked ? esc(sc.init || '') : '') + '</td></tr>';
+            + '<td>' + (worked && sheetInitEvery() ? esc(sc.init || '') : '') + '</td></tr>';
         }).join('')
       + '</tbody><tfoot><tr><td colspan="3">Week total</td><td class="num">' + b.hours.toFixed(2) + '</td><td></td></tr></tfoot></table>';
   }).join('') + '</div>';
@@ -13085,9 +13131,9 @@ function sheetDocParts(){
               var w = d.inMs != null;
               return '<tr>'
                 + '<td>' + (w ? esc(sc.name || '') : '') + '</td>'
-                + '<td>' + (w ? esc(sc.init || '') : '') + '</td>'
+                + '<td>' + (w && sheetInitEvery() ? esc(sc.init || '') : '') + '</td>'
                 + '<td>' + fmtSheetTime(d.inMs) + '</td>'
-                + '<td>' + (w ? esc(sc.init || '') : '') + '</td>'
+                + '<td>' + (w && sheetInitEvery() ? esc(sc.init || '') : '') + '</td>'
                 + '<td>' + fmtSheetTime(d.outMs) + '</td>'
                 + '<td>' + usDate(d.dayMs) + '</td></tr>';
             }).join('')
@@ -13123,7 +13169,8 @@ document.getElementById('shCsv').onclick = function(){
     b.days.forEach(function(d){
       var w = d.inMs != null;
       lines.push([dateInput(new Date(d.dayMs)), fmtSheetTime(d.inMs), fmtSheetTime(d.outMs),
-                  w ? d.hours.toFixed(2) : '', w ? (sc.init || '') : '', w ? (sc.name || '') : '']
+                  w ? d.hours.toFixed(2) : '',
+                  w && sheetInitEvery() ? (sc.init || '') : '', w ? (sc.name || '') : '']
         .map(function(v){ return /[",]/.test(v) ? '"' + String(v).replace(/"/g, '""') + '"' : v; }).join(','));
     });
     lines.push(',,Week total,' + b.hours.toFixed(2) + ',,');

@@ -176,8 +176,10 @@ ok('before anything closes it explains itself',
 await p.close();
 p = await boot(ctx, {...base, sessions:[S('n',8,10,14,0,22,30), S('o',7,27,14,0,22,30)],
   cfg:{...base.cfg, schedStart:'', schedEnd:''}}, T(8,10,18));
-ok('with no schedule set it says how to fix that',
-   (await p.textContent('#tcSched')).includes('Decimal Time Conversion'), await p.textContent('#tcSched'));
+/* It used to send people to "the Decimal Time Conversion section", where the schedule
+   fields had been removed — a message naming a control that is not there. */
+ok('with no schedule set it says where to actually fix that',
+   (await p.textContent('#tcSched')).includes('Settings'), await p.textContent('#tcSched'));
 ok('and claims nothing rather than guessing', (await tcRows(p))[0].claim==='—',
    (await tcRows(p))[0].claim);
 
