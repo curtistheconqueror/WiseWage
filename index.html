@@ -2278,9 +2278,8 @@
             </select>
             <div class="note" id="modeNote" style="margin-top:8px"></div>
           </div>
-          <div class="note" style="margin-top:12px">Switching only changes what is on screen.
-          Your shifts, settings and history are the same in both, and nothing stops being
-          recorded in Lite — turn Full on after a year and the whole year is there.</div>
+          <div class="note" style="margin-top:12px">Only changes what is on screen. Lite
+          records everything Full does.</div>
         </div>
       </details>
       <details class="cfgsec fullonly" id="gJobs">
@@ -2397,19 +2396,14 @@
         <summary><span class="cfgt">Your schedule</span><span class="cfgsum" id="sumSched"></span></summary>
         <div class="cfgbody">
       <div class="f" style="margin-top:18px"><label>Your scheduled shift</label>
-        <div class="note">The hours you are rostered for. Everything that asks "how far outside
-        your shift was this" — the decimal time card, the what-if at the clock — measures
-        against these.</div>
+        <div class="note">What "outside your shift" is measured against.</div>
       </div>
       <div class="cfgrid">
         <div class="f"><label for="cSchedStart2">Scheduled start</label><input type="time" id="cSchedStart2"></div>
         <div class="f"><label for="cSchedEnd2">Scheduled end</label><input type="time" id="cSchedEnd2"></div>
       </div>
       <div class="f" style="margin-top:18px"><label>Days you are scheduled to work</label>
-        <div class="note">The roster the app judges everything else against. "The day before a
-        holiday" means the shift before it, not whatever date happens to sit there — so a
-        Monday holiday looks at Sunday and Tuesday, and one on a Friday reaches back to
-        Thursday and forward to Sunday.</div>
+        <div class="note">Your roster. Holiday rules count shifts from here, not dates.</div>
       </div>
       <div class="autodays" id="cWorkDays" style="justify-content:flex-start">
         <button data-w="0">Sun</button><button data-w="1">Mon</button><button data-w="2">Tue</button>
@@ -2422,10 +2416,8 @@
           <option value="0">Counts like any other day</option>
           <option value="1">Overtime from the first minute</option>
         </select>
-        <div class="note">Most agreements with a fixed roster pay premium for a day off you
-        gave up, however short it is. Your overtime rule cannot see it on its own — five hours
-        on a day off is under every threshold there is, so it would otherwise be paid as
-        ordinary time.</div></div>
+        <div class="note">A short day off would fall under every threshold, so no overtime
+        rule can catch it on its own.</div></div>
       <div class="cfgrid">
         <div class="f"><label>Unpaid lunch per shift</label>
           <select id="cLunch">
@@ -2436,15 +2428,11 @@
         <div class="f"><label>Extra unpaid lunches to deduct</label>
           <input type="number" id="cLunchExtra" min="0" step="1" value="0"></div>
       </div>
-      <div class="note" id="lunchNote" style="margin-top:10px">Lunch starts after 5 worked hours — 
-      the clock pauses for it mid-shift, shifts already logged are corrected automatically, and lunch
-      time never counts toward overtime. 'Extra' is only for lunches hiding in hours the log cannot
-      see, like a year-so-far carry-in — logged shifts are already handled.</div>
+      <div class="note" id="lunchNote" style="margin-top:10px">Taken after 5 worked hours, never
+      counted toward overtime. 'Extra' is only for hours the log cannot see.</div>
       <div class="f" style="margin-top:18px"><label for="cShiftDay">Which day a shift belongs to</label>
-        <div class="note">A shift that crosses midnight is still one shift, and it belongs to
-        one day. By default that is whichever day holds most of it — so a 10 PM start is the
-        next day's shift, while a 6 PM start is that evening's. Change it only if your
-        employer names them some other way.</div>
+        <div class="note">For shifts crossing midnight. Change it only if your employer names
+        them differently.</div>
       </div>
       <div class="cfgrid">
         <div class="f"><label for="cShiftDay">Rule</label>
@@ -2455,14 +2443,9 @@
           </select></div>
       </div>
       <div class="f" style="margin-top:18px"><label for="cMakeUp">Watch my schedule for missed days</label>
-        <div class="note">Some contracts only pay overtime once you have actually worked your
-        scheduled hours — miss a day and you work back out of it before overtime starts
-        again. Turn this on and hours past your daily threshold pay the hole down first;
-        only what is left over pays at the overtime rate. It settles the whole window, so
-        calling off on Wednesday takes back Monday's overtime — though not for nothing,
-        since those hours go straight onto the hole. Applies to the daily and per-shift
-        rules only: a weekly or pay-period threshold already handles a missed day by never
-        reaching forty. You are never paid less for hours you worked.</div>
+        <div class="note">Hours past your daily threshold pay down a missed day before any of
+        them pay overtime. Daily and per-shift rules only. You are never paid less for hours
+        you worked.</div>
       </div>
       <div class="cfgrid">
         <div class="f"><label for="cMakeUp">Missed days</label>
@@ -2479,11 +2462,8 @@
       <div class="note" id="cMakeUpNote" style="margin-top:8px"></div>
       <div class="note" id="cShiftDayNote" style="margin-top:8px"></div>
       <div class="f" style="margin-top:18px"><label for="cSkewOn">If the shop clock is off</label>
-        <div class="note">Time clocks drift, and the machine at work is the one that prints
-        your card. If it reads a minute or two off your phone, turn this on and the app shows
-        the times the machine would stamp — so what you copy onto a slip matches what it
-        printed. Your hours and your pay do not change: both ends of a shift move together.
-        Leave it off until you have watched the difference hold for a few days.</div>
+        <div class="note">Shows the times the clock at work would stamp, so a slip you copy
+        out matches your card. Your hours and pay do not change.</div>
       </div>
       <div class="cfgrid">
         <div class="f"><label for="cSkewOn">Match the shop clock</label>
@@ -2498,10 +2478,8 @@
         <summary><span class="cfgt">Premiums</span><span class="cfgsum" id="sumPrem"></span></summary>
         <div class="cfgbody">
       <div class="f" style="margin-top:18px"><label for="cNightOn">Shift differential</label>
-        <div class="note">Extra money per hour for the part of a shift inside a window — the
-        night or evening premium a lot of contracts pay. It is paid on the hours that fall
-        inside it, not on the whole shift, and it rides on your base rate, so overtime is
-        worked out on rate plus differential. Paid days off never earn it.</div>
+        <div class="note">Extra per hour for the hours inside a window — the night or evening
+        premium. Paid days off never earn it.</div>
       </div>
       <div class="cfgrid">
         <div class="f"><label for="cNightOn">Pay a differential</label>
@@ -2515,10 +2493,8 @@
       <div class="note" id="cNightNote" style="margin-top:8px"></div>
 
       <div class="f" style="margin-top:18px"><label>Premiums that stack</label>
-        <div class="note">One differential is enough for most jobs. Some pay several at once
-        — nights, weekends, charge — and they add rather than replace, so an hour can carry
-        all of them. Leave the times blank for a premium that applies to the whole shift,
-        which is what charge pay usually is. Paid days off never earn any of them.</div>
+        <div class="note">For a job that pays more than one at a time. They add rather than
+        replace. Leave the times blank for one that covers the whole shift.</div>
       </div>
       <div id="cPremList"></div>
       <div class="actions" style="justify-content:flex-start;margin-top:10px">
@@ -2527,10 +2503,8 @@
       <div class="note" id="cPremNote" style="margin-top:8px"></div>
 
       <div class="f" style="margin-top:18px"><label for="cCallback">If you are called in</label>
-        <div class="note">Being called in usually pays a guaranteed minimum however short the
-        job is — twenty minutes at 3 AM bills the contract's minimum. Those hours count as
-        hours worked, so they push you toward overtime like any others. Tick a shift as a
-        call-in when you log it.</div>
+        <div class="note">The minimum a call-in bills, however short the job. Tick a shift as
+        a call-in when you log it.</div>
       </div>
       <div class="cfgrid">
         <div class="f"><label for="cCallback">Guaranteed hours</label>
@@ -2542,9 +2516,8 @@
         <summary><span class="cfgt">Time off</span><span class="cfgsum" id="sumOff"></span></summary>
         <div class="cfgbody">
       <div class="f" style="margin-top:18px"><label>Paid holidays</label>
-        <div class="note">Days off that still pay. Each one is a rule rather than a date, so
-        the calendar is right every year without anyone editing it. Switch one off if your
-        contract does not have it, rename it, or add your own.</div>
+        <div class="note">Each one is a rule rather than a date, so every year is right on its
+        own.</div>
       </div>
       <div class="cfgrid">
         <div class="f"><label for="cHolHours">A holiday is worth (h)</label>
@@ -2695,9 +2668,8 @@
       <div class="note" id="tRgbNote" style="margin-top:8px"></div>
 
       <div class="f" style="margin-top:18px"><label>A colour per section</label>
-        <div class="note">Every section takes the heading colour above unless you give it one
-        of its own. Useful for finding the one you use most without reading, and for anyone
-        who tracks the app by colour rather than by word.</div>
+        <div class="note">Sections take the heading colour above unless you give one its
+        own.</div>
       </div>
       <div class="seccols" id="secCols"></div>
       <div class="actions" style="justify-content:flex-start;margin-top:10px">
@@ -2726,9 +2698,8 @@
         <summary><span class="cfgt">Scanning</span><span class="cfgsum" id="sumScan"></span></summary>
         <div class="cfgbody">
           <div class="f"><label for="cfgScanKey">Anthropic API key</label>
-            <div class="note">Only needed to read a photo. Typing the stamps by hand needs
-            nothing. WiseWage has no server, so the key is stored on this device and used
-            straight from this page — it is yours and only you can spend it.</div>
+            <div class="note">Only needed to read a photo. There is no server, so it is
+            stored on this device and used from this page.</div>
             <input type="password" id="cfgScanKey" autocomplete="off" spellcheck="false"
               placeholder="sk-ant-..." style="margin-top:8px">
           </div>
@@ -2742,9 +2713,8 @@
             <button class="mini" id="cfgScanClear">Forget this key</button>
           </div>
           <div class="note" id="cfgScanState" style="margin-top:9px"></div>
-          <div class="note" style="margin-top:12px">A photo costs a few cents to read. The
-          photo itself is never stored — only the stamp text it produced, which is kept on
-          every shift as the evidence if a figure is ever disputed.</div>
+          <div class="note" style="margin-top:12px">A few cents a photo. The photo is never
+          stored — only the stamps it produced, kept on each shift.</div>
         </div>
       </details>
       <details class="cfgsec" id="gData">
@@ -2752,8 +2722,8 @@
         <div class="cfgbody">
       <div class="f" style="margin-top:16px">
         <label>Back up &amp; move your data</label>
-        <div class="note">Your rate, schedule and every shift live in this browser only. Save a backup
-        to keep a copy, or to carry everything to another device or another copy of this app.</div>
+        <div class="note">Everything lives in this browser only. A backup is how you keep a copy
+        or move to another device.</div>
       </div>
       <div class="actions" style="justify-content:flex-start;margin-top:12px">
         <button class="mini" id="backup">⇩ Save a backup</button>
@@ -2777,9 +2747,8 @@
            the app, never the data. Saying so on the button matters, because "refresh" in an
            app that holds a year of someone's shifts is a frightening word. -->
       <div class="f" style="margin-top:18px"><label>This app</label>
-        <div class="note">Running build <b id="verNote">—</b>. Updates normally arrive on
-        their own; use this if the build below stops changing after a new one is released.
-        It clears the cached copy of the app only — your shifts and settings are untouched.</div>
+        <div class="note">Running build <b id="verNote">—</b>. Use this if that stops changing
+        after a new one is out. Your shifts and settings are untouched.</div>
       </div>
       <div class="actions" style="justify-content:flex-start;margin-top:10px">
         <button class="mini" id="swRefresh">↻ Check for a new version</button>
@@ -5866,7 +5835,17 @@ var HELP = {
     'or overtime, it does not care.</dd>' +
     '<dt>Holiday pay</dt><dd>Applies to the day, whether or not you worked it.</dd>' +
     '</dl>' +
-    '<p>So a night hour of overtime on a holiday is all three at once.</p>' },
+    '<p>So a night hour of overtime on a holiday is all three at once.</p>' +
+    '<p>A differential is paid only on the hours that fall inside its window, not on the whole ' +
+    'shift, and it rides on your base rate — so overtime is worked out on rate plus ' +
+    'differential. Paid days off never earn one.</p>' +
+    '<p>If your job pays several at once — nights, weekends, charge — add them under ' +
+    '<b>Premiums that stack</b>. They add rather than replace, so one hour can carry all of ' +
+    'them, and a premium with no times set covers the whole shift, which is what charge pay ' +
+    'usually is.</p' +
+    '<p><b>Guaranteed hours</b> cover being called in: most contracts pay a minimum however ' +
+    'short the job is, so twenty minutes at 3 AM bills that minimum. Those hours count as ' +
+    'hours worked, so they push you toward overtime like any others.</p>' },
 
   otmode: { title: 'Which rule is which', body:
     '<p>The most expensive setting here. The rules sound alike and pay differently:</p>' +
@@ -5896,13 +5875,40 @@ var HELP = {
     'and the amounts are right but the dates are not.</p>' +
     '<p>The overtime week is separate again, and need not start on the same day.</p>' },
 
+  /* The shop-clock offset lives in this group too, and its note on screen used to carry the
+     whole explanation — why the machine's time is the one that matters, and the advice to
+     watch the drift before trusting it. */
   makeup: { title: 'Two different kinds of owing', body:
     '<p><b>Making up a missed day</b> is about overtime: hours worked to replace a missed day are ' +
     'restoring your normal week, so they do not push you into overtime first.</p>' +
     '<p><b>An allowance you owe back</b> is about the day itself — a sick day some contracts ' +
     'expect you to work off. Set per allowance, further down.</p>' +
     '<p>They sound alike and they are not: the first changes what an hour is worth, the second ' +
-    'changes what a day costs you.</p>' },
+    'changes what a day costs you.</p>' +
+    '<p>Making up a day settles the <b>whole window</b>, not one shift, so calling off on ' +
+    'Wednesday can take back Monday\'s overtime — though not for nothing, since those hours ' +
+    'go straight onto what you owe.</p>' +
+    '<p>It applies to the daily and per-shift rules only. A weekly or pay-period threshold ' +
+    'already handles a missed day by never reaching forty.</p>' +
+    '<p><b>Matching the shop clock</b> is a separate thing in this section. Time clocks drift, ' +
+    'and the machine at work is the one that prints your card — so if it reads a minute or two ' +
+    'off your phone, this shows the times it would stamp. Both ends of a shift move together, ' +
+    'so your hours and your pay are untouched. Leave it off until you have watched the ' +
+    'difference hold for a few days.</p>' +
+    '<p><b>Your roster</b> is what everything else is judged against. "The day before a holiday" ' +
+    'means the shift before it, not whatever date happens to sit there — so a Monday holiday ' +
+    'looks at Sunday and Tuesday, and one on a Friday reaches back to Thursday and forward to ' +
+    'Sunday.</p>' +
+    '<p><b>A day you were not scheduled for</b> usually pays premium under a fixed roster, ' +
+    'however short it is. No overtime rule can see that on its own: five hours on a day off is ' +
+    'under every threshold there is, so it would otherwise pay as ordinary time.</p>' +
+    '<p><b>Unpaid lunch</b> starts after five worked hours. The clock pauses for it mid-shift, ' +
+    'shifts already logged are corrected automatically, and lunch never counts toward overtime. ' +
+    'The \'extra\' figure is only for lunches hiding in hours the log cannot see, such as a ' +
+    'year-so-far carry-in.</p>' +
+    '<p><b>Which day a shift belongs to</b> matters for anything crossing midnight: one shift ' +
+    'belongs to one day, and by default that is whichever day holds most of it. A 10 PM start ' +
+    'is the next day\'s shift; a 6 PM start is that evening\'s.</p>' },
 
   banks: { title: 'Allowances, holidays and vacation', body:
     '<p>Three things this app tracks separately because they behave differently:</p>' +
@@ -5914,7 +5920,10 @@ var HELP = {
     '<dt>Vacation</dt><dd>A <b>block of dates</b> rather than days taken one at a time.</dd>' +
     '</dl>' +
     '<p>Nothing is assumed for you — an allowance exists only if you added it. Each one carries ' +
-    'how many you have already spent this year, because almost nobody starts using this in January.</p>' },
+    'how many you have already spent this year, because almost nobody starts using this in January.</p>' +
+    '<p>A holiday is stored as a <b>rule</b> rather than a date — "the third Monday in January" ' +
+    'rather than one year\'s date — so the calendar stays right every year without anyone ' +
+    'editing it. Switch one off if your contract does not have it, rename it, or add your own.</p>' },
 
   net: { title: 'When a deduction comes out', body:
     '<p>This is the part that is easy to get wrong, and it changes what is withheld.</p>' +
@@ -5977,7 +5986,10 @@ var HELP = {
     '<p>A <b>CSV</b> is a table of shifts for a spreadsheet or a payroll dispute. It cannot be ' +
     'restored from and does not contain your settings.</p>' +
     '<p>Everything lives in this browser and nowhere else, so clearing site data with no backup ' +
-    'loses it.</p>' }
+    'loses it.</p>' +
+    '<p><b>Force an update</b>, at the foot of this section, is for when a new build has been ' +
+    'released and the running build above stops changing. Updates normally arrive on their own. ' +
+    'It clears the cached copy of the app only — nothing you have recorded is touched.</p>' }
 
 };
 
@@ -5991,7 +6003,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v93';
+var APP_BUILD = 'v94';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -12290,8 +12302,7 @@ function renderJobList(){
   }).join('');
   var n = js.length;
   el('jobNote').innerHTML = n < 2
-    ? 'One job, so nothing extra is shown anywhere. Add a second and a switcher appears above '
-      + 'the clock; remove it again and everything goes back exactly as it is now.'
+    ? 'One job, so nothing extra is shown. Add a second and a switcher appears above the clock.'
     : 'Each job keeps its own shifts, settings and clock. Removing one deletes its shifts '
       + 'with it, so export a backup first if you might want them.';
 }

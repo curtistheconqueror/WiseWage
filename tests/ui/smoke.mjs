@@ -276,6 +276,59 @@ const boxes=await mob.evaluate(()=>[...document.querySelectorAll('input[type=che
             return (x.id||x.className||'checkbox')+':'+Math.round((l||x).getBoundingClientRect().height); })
   .filter(s=>+s.split(':')[1] < 44));
 ok('and every checkbox has a label big enough to hit', boxes.length===0, boxes.join(', '));
+
+/* A ratchet on wordiness, because nothing else guards it.
+   
+   The whole copy pass that took on-screen prose from 1,281 words to 700 broke not one
+   assertion — tests check labels and figures, never paragraphs, so the prose can grow back
+   silently. This counts the words a user can actually SEE: every card expanded, help notes
+   left closed, and runs of 12+ words counted as prose rather than labels.
+
+   Two traps are worth knowing if this ever needs changing. Force-opening every <details>
+   counts the help bodies, which turns a cut into an apparent increase. And `offsetParent`
+   is not a visibility test here — in this Chromium the contents of a CLOSED <details> still
+   report a layout box, which is why the check below walks up looking for one instead.
+
+   The ceiling is deliberately above today's figure: this is a ratchet against creep, not a
+   freeze. If a genuinely necessary explanation pushes past it, raise the number in the same
+   commit and say why — that is the point, to make it a decision rather than a drift. */
+{
+  const prose = await mob.evaluate(() => {
+    document.querySelectorAll('.col').forEach(c => c.classList.add('open'));
+    document.querySelectorAll('details').forEach(d => {
+      if (!d.classList.contains('helpnote')) d.open = true;
+    });
+    const visible = (node) => {
+      const el = node.parentElement;
+      if (!el) return false;
+      if (el.offsetParent === null && el.tagName !== 'BODY') return false;
+      for (let n = el; n && n !== document.body; n = n.parentElement){
+        if (n.tagName === 'DETAILS' && !n.open){
+          let inSummary = false;
+          for (let m = el; m && m !== n; m = m.parentElement) if (m.tagName === 'SUMMARY') inSummary = true;
+          if (!inSummary) return false;
+        }
+      }
+      return true;
+    };
+    let total = 0;
+    document.querySelectorAll('section.card').forEach(card => {
+      if (card.offsetParent === null) return;
+      const walk = document.createTreeWalker(card, NodeFilter.SHOW_TEXT);
+      let n;
+      while ((n = walk.nextNode())){
+        const el = n.parentElement;
+        if (!el || /^(SCRIPT|STYLE|OPTION)$/.test(el.tagName)) continue;
+        if (!visible(n)) continue;
+        const w = (n.nodeValue || '').trim().split(/\s+/).filter(Boolean).length;
+        if (w >= 12) total += w;       // a run this long reads as a sentence, not a label
+      }
+    });
+    return total;
+  });
+  const CEILING = 850;                 // measured at 700 the day this landed
+  ok(`on-screen prose stays under ${CEILING} words`, prose <= CEILING, prose + ' words');
+}
 await mob.close();
 
 console.log(`\n${fails===0?'✅ ALL CLEAR':'❌ PROBLEMS FOUND'} — ${fails} failure(s)\n`);

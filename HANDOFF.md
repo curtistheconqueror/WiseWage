@@ -4,7 +4,7 @@
 architecture.** This file is the current state and the road ahead. `PLAN.md` is the
 professions/multi-job design and has not changed.
 
-Current build: **v93**. 18 guards, 937 engine assertions, 74 UI suites / 2,885 assertions —
+Current build: **v94**. 18 guards, 937 engine assertions, 74 UI suites / 2,886 assertions —
 all green, and all three run in CI on every push.
 
 ---
@@ -275,12 +275,36 @@ session** — the app is on the owner's machine and not in this repository.
   discriminated nothing. Same fault as the `carryin` assertion noted above. A green
   assertion that cannot fail for the right reason is worse than no assertion.
 
-  *Copy:* 3,940 words on screen, ~2,440 achievable. Settings alone is 1,856 words, 1,177 of
-  them prose. Three pieces of copy were simply **wrong** and are fixed. The four sections
-  the owner named are cut. **Roughly 30 edits remain**, mostly in Settings. The standard is
-  set: a label that names the thing is usually enough; people know their own employment
-  terms; anything genuinely load-bearing goes behind the existing `helpnote` disclosure
-  rather than on the screen.
+  *Copy:* done in v94, and **the audit's headline figure was wrong**. "3,940 words on screen"
+  counts text that is already folded behind the `?` disclosures, plus content inside
+  collapsed sections. A first probe here reproduced it almost exactly (3,946), which looked
+  like confirmation until the reason turned up: it force-opened every `<details>`, and
+  `offsetParent` does not detect the rest, because **in this Chromium the contents of a
+  closed `<details>` still report a layout box**. That is the same quirk that made a field
+  inside a collapsed settings group read as on screen.
+
+  Measured properly — cards expanded, help notes closed, runs of 12+ words counted as prose:
+
+  | | before | after |
+  |---|---|---|
+  | whole app | 2,600 words / 1,281 prose | **2,047 / 700** |
+  | Settings | 1,509 / 958 | **956 / 377** |
+
+  Prose is down 45% app-wide and 61% in Settings, with **nothing deleted** — fourteen notes
+  were cut to a line and their substance folded into the `?` that section already had, so no
+  new `?` appeared anywhere. The owner rejected a `?` per category once; the design comment
+  by `HELP_FOR` records that and it still holds.
+
+  The standard that drove it: a label that names the thing is usually enough; people know
+  their own employment terms; anything genuinely load-bearing goes behind the existing
+  `helpnote` disclosure rather than on the screen.
+
+  **The pass broke not one assertion**, which is the real lesson: tests check labels and
+  figures, never paragraphs, so prose can grow back silently. `smoke.mjs` now carries a
+  ratchet — on-screen prose must stay under 850 words, measured the careful way, verified
+  firing at 881. It is a ceiling above today's figure on purpose. If a genuinely necessary
+  explanation pushes past it, raise the number in the same commit and say why; the point is
+  to make wordiness a decision rather than a drift.
 
   Order the owner asked for: bugs, then the copy pass.
 - **`vacationOn()` is dead code** — the calendar uses `vacationCredits()` instead.
