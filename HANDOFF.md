@@ -4,7 +4,7 @@
 architecture.** This file is the current state and the road ahead. `PLAN.md` is the
 professions/multi-job design and has not changed.
 
-Current build: **v91**. 18 guards, 937 engine assertions, 74 UI suites / 2,870 assertions —
+Current build: **v92**. 18 guards, 937 engine assertions, 74 UI suites / 2,880 assertions —
 all green, and all three run in CI on every push.
 
 ---
@@ -236,10 +236,25 @@ session** — the app is on the owner's machine and not in this repository.
   twelve was summarised rather than itemised and the arithmetic no longer reconciles — trust
   these six, not a number:
 
-  1. two editors can be open at once
-  2. "Change in Settings" leaves the target group collapsed — `applyCfgGroups()` re-reads
-     persisted state. Confirmed twice over: it also defeated a probe here that set
-     `details.open` directly, which is how it was re-found
+  ~~two editors can be open at once~~ — fixed in v92, and it was worse than the finding
+  said. Disabling the fix shows **five** panels open together (`editor, absEdit, offEdit,
+  holEdit, vacEdit`), with `holEditing` still holding a holiday while the user had moved to
+  the vacation panel — a live Save aimed at a record they were no longer looking at, which
+  is the same family as the array-index bug. One gate, `closeOtherEditors(keep)`, called at
+  all eight open sites; it *closes* rather than hides, so each panel's own close routine
+  runs and editing ids are cleared. It must run **before** the panel shows itself, because
+  the log's two editors both hide `logActions` and whichever opens last has to win it.
+  Ten assertions in `editguard.mjs`, verified failing without the gate.
+  2. "Change in Settings" leaves the target group collapsed. Mechanism found and it is a
+     race, not just a re-read: `xSchedEdit` does `g.open = true` and then calls
+     `applyCfgGroups()` on the very next line. The spec fires `toggle` on `<details>`
+     **asynchronously**, so the handler that persists the new state has not run yet, and
+     `applyCfgGroups()` reads the *old* value and closes the group the click just opened.
+     Fix is to persist the intent directly instead of relying on the event, and to drop the
+     `applyCfgGroups()` call, which that handler does not need.
+     (An earlier note here claimed a probe in this session independently confirmed this.
+     It did not — that probe failed because `#cfg > details` was closed, and `details.open`
+     stuck once it was opened. Claim withdrawn.)
   3. a 4px gap between ✎ and ✕ in two row types
   4. a 17px holiday on/off checkbox
   5. the net-setup link's one-way scroll trip

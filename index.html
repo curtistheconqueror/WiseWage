@@ -5981,7 +5981,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v91';
+var APP_BUILD = 'v92';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -6508,6 +6508,7 @@ function openOffEditor(id){
   syncOffForm();
   if (cur && cur.slot != null) el('oSlot').value = cur.slot;
   paintOffPreview();
+  closeOtherEditors('offEdit');
   show('offEdit', true);
   el('offEdit').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -6655,6 +6656,7 @@ function openVacation(id){
   el('vTo').value = v ? v.to : dateValue(+addDays(Date.now(), 13));
   el('vHours').value = v ? (v.hours == null ? 8 : v.hours) : 8;
   el('vOt').value = v && v.ot ? '1' : '0';
+  closeOtherEditors('vacEdit');
   show('vacEdit', true); show('vErr', false);
   previewVacation();
 }
@@ -6777,6 +6779,7 @@ function openHolEditor(i){
   el('hOt').value = (h && h.ot === false) ? '0' : '1';
   show('hErr', false);
   syncHolKind();
+  closeOtherEditors('holEdit');
   show('holEdit', true);
   /* `nearest` scrolls the least that makes the whole panel visible, which is the right
      amount — the panel is 569px in an 844px window, so it fits with room over.
@@ -7522,6 +7525,7 @@ function openYtdBase(){
   el('yBaseHours').value = b.hours == null ? '' : b.hours;
   el('yBaseOt').value = b.ot == null ? '' : b.ot;
   el('yBaseThrough').value = b.through || '';
+  closeOtherEditors('yBase');
   show('yBase', true);
 }
 function saveYtdBase(){
@@ -9666,6 +9670,7 @@ function openAbsence(id, dayMs, kind){
         return h >= 0.01 ? h.toFixed(2) : (state.cfg.holidayHours || 8);
       })();
   el('aNote').value = a ? (a.note || '') : '';
+  closeOtherEditors('absEdit');
   show('absEdit', true); show('aErr', false); show('logActions', false);
   previewAbsence();
 }
@@ -9710,6 +9715,7 @@ function openBackdate(){
   el('bHours').value = 2;
   el('bEarned').value = (state.cfg.rate * 2).toFixed(2);
   setBackMode('time');
+  closeOtherEditors('backdate');
   show('backdate', true); show('backrow', false);
   previewBackdate();
 }
@@ -9743,6 +9749,28 @@ var pendingDelete = null;
 
 var el = function(id){ return document.getElementById(id); };
 function show(id, on){ el(id).classList.toggle('hide', !on); }
+
+/* One editor at a time.
+
+   These are eight separate panels with their own state, and nothing stopped two being open
+   together — two Save buttons for different things on one screen, and a stale editing id
+   left behind in whichever one you walked away from. Every open site calls this first, so
+   opening one *closes* the rest rather than merely hiding them: the panels that own a close
+   routine get it, and the ones that track what they are editing have that cleared. It runs
+   before the panel shows itself, because the log's two editors both hide `logActions` and
+   whichever is being opened has to have the last word on it. */
+function closeOtherEditors(keep){
+  var ids = ['backout', 'backdate', 'editor', 'absEdit', 'offEdit', 'yBase', 'holEdit', 'vacEdit'];
+  for (var i = 0; i < ids.length; i++){
+    var id = ids[i], node = el(id);
+    if (id === keep || !node || node.classList.contains('hide')) continue;
+    if (id === 'absEdit'){ closeAbsence(); continue; }
+    if (id === 'vacEdit'){ closeVacation(); continue; }
+    if (id === 'offEdit') offEditing = null;
+    if (id === 'holEdit') holEditing = null;
+    show(id, false);
+  }
+}
 
 /* Holiday names are typed by you and land in innerHTML and in attributes, so they get
    escaped on the way through rather than trusted. */
@@ -9825,6 +9853,7 @@ function openEditor(id){
     el('eHours').value = 8;
     el('eIn').value = '08:00'; el('eOut').value = '16:00';
   }
+  closeOtherEditors('editor');
   show('editor', true); show('logActions', false); show('clearConfirm', false);
   previewShift();
   el(editMode === 'hours' ? 'eHours' : 'eIn').focus();
@@ -11184,6 +11213,7 @@ function openBackout(){
   el('coTime').value = shopTimeValue(guess);
   el('coAgo').value = 1;
   setOutMode('time');
+  closeOtherEditors('backout');
   show('backout', true); show('outrow', false);
   previewBackout();
 }
