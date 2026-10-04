@@ -140,8 +140,22 @@ ok('no "other deductions" line when there are none', !txt.includes('Your other d
 
 console.log('\nThe note\'s button opens the interview deliberately, and scrolls it into view');
 await p.click('#qEditDed');
-await p.waitForTimeout(1200);            // smooth scroll settles around 700ms
 ok('interview opens on request', await p.isVisible('#netsetup'));
+/* Wait for the scroll to stop, not for a stopwatch.
+
+   The panel sits about 10,000px above the calculator and the scroll is animated, so its
+   duration is proportional to the distance and varies with how loaded the machine is.
+   This used to sleep 1200ms against a ~700ms settle, which looks like plenty until a
+   shared CI runner eats the margin: it measured -142px of a 10,179px journey — 98.6%
+   of the way there and one frame short. Three quiet polls mean the animation is over.
+   If the click did nothing at all, this still returns and the assertion below still
+   fails, so nothing is masked. */
+await p.waitForFunction(() => {
+  const y = Math.round(window.scrollY);
+  const s = (window.__scrollWatch = window.__scrollWatch || { y: null, still: 0 });
+  if (s.y === y) s.still++; else { s.y = y; s.still = 0; }
+  return s.still >= 3;
+}, null, { timeout: 15000, polling: 100 });
 const inView = await p.evaluate(()=>{ const r=document.getElementById('netsetup').getBoundingClientRect();
   return r.top > -50 && r.top < window.innerHeight; });
 ok('and is scrolled into view rather than left off-screen', inView,
