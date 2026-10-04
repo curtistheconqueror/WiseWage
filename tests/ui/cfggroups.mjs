@@ -154,5 +154,34 @@ const m=await p.evaluate(()=>{const s=document.querySelector('#gPay>summary');
 ok('no sideways scroll', m.w<=m.win+1, `${m.w} vs ${m.win}`);
 ok('the headings are finger-sized', m.h>=44, m.h+'px');
 
+
+/* "Change in Settings" has to land on an OPEN group.
+
+   It used to set `g.open = true` and then call applyCfgGroups() on the next line. The spec
+   fires `toggle` on a <details> asynchronously, so the listener that persists the new state
+   had not run yet — applyCfgGroups() read the old stored value and shut the group the click
+   had just opened. The group is started closed here on purpose, because that is the state
+   that made the race visible. */
+console.log('\n━━ Jumping to a setting from another card ━━');
+await p.evaluate(()=>{document.querySelectorAll('#cfg .cfgsec').forEach(d=>d.open=false);});
+await p.waitForTimeout(400);
+ok('the schedule group starts closed', (await p.evaluate(()=>document.getElementById('gSched').open))===false);
+await p.evaluate(()=>{document.querySelectorAll('.col').forEach(c=>c.classList.add('open'));});
+await p.waitForTimeout(200);
+await p.evaluate(()=>document.getElementById('xSchedEdit').click());
+await p.waitForTimeout(700);
+ok('the link leaves it open, not collapsed again',
+   (await p.evaluate(()=>document.getElementById('gSched').open))===true);
+/* There was a third assertion here, checking that `cSchedStart2` was laid out. It sits
+   inside this group, so it looked like a fair proxy — but it passed with the bug present
+   and the group reporting closed, so it discriminated nothing and is gone rather than kept
+   for the look of it. Whatever Chromium does with the contents of a closed <details>, it is
+   not a signal about this fix. `.open` is. */
+/* Still open after the state is reapplied, which is what used to undo it. */
+await p.evaluate(()=>applyCfgGroups());
+await p.waitForTimeout(300);
+ok('and it survives the group state being reapplied',
+   (await p.evaluate(()=>document.getElementById('gSched').open))===true);
+
 console.log(`\n${fails===0?'✅':'❌'}  ${fails===0?'all passed':fails+' failed'}`);
 await b.close(); srv.close(); process.exit(fails===0?0:1);

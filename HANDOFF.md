@@ -4,7 +4,7 @@
 architecture.** This file is the current state and the road ahead. `PLAN.md` is the
 professions/multi-job design and has not changed.
 
-Current build: **v92**. 18 guards, 937 engine assertions, 74 UI suites / 2,880 assertions —
+Current build: **v93**. 18 guards, 937 engine assertions, 74 UI suites / 2,885 assertions —
 all green, and all three run in CI on every push.
 
 ---
@@ -232,12 +232,12 @@ session** — the app is on the owner's machine and not in this repository.
   `holiday1.mjs` guards this by **DOM order, not pixels**, since position is the thing that
   regresses; verified failing on the old layout (`editor:12, vacList:9`).
 
-  **Still open**, and this is the list rather than a count, because the original tally of
-  twelve was summarised rather than itemised and the arithmetic no longer reconciles — trust
-  these six, not a number:
+  **The rest went in v92 and v93.** Treat what follows as the record of what was fixed, not
+  a backlog. Note that the original tally of twelve was summarised rather than itemised and
+  the arithmetic stopped reconciling partway through, so if a count matters, re-run the
+  audit rather than trusting a remembered total.
 
-  ~~two editors can be open at once~~ — fixed in v92, and it was worse than the finding
-  said. Disabling the fix shows **five** panels open together (`editor, absEdit, offEdit,
+  **Two editors open at once** — fixed in v92, and it was worse than the finding said. Disabling the fix shows **five** panels open together (`editor, absEdit, offEdit,
   holEdit, vacEdit`), with `holEditing` still holding a holiday while the user had moved to
   the vacation panel — a live Save aimed at a record they were no longer looking at, which
   is the same family as the array-index bug. One gate, `closeOtherEditors(keep)`, called at
@@ -245,23 +245,35 @@ session** — the app is on the owner's machine and not in this repository.
   runs and editing ids are cleared. It must run **before** the panel shows itself, because
   the log's two editors both hide `logActions` and whichever opens last has to win it.
   Ten assertions in `editguard.mjs`, verified failing without the gate.
-  2. "Change in Settings" leaves the target group collapsed. Mechanism found and it is a
-     race, not just a re-read: `xSchedEdit` does `g.open = true` and then calls
-     `applyCfgGroups()` on the very next line. The spec fires `toggle` on `<details>`
-     **asynchronously**, so the handler that persists the new state has not run yet, and
-     `applyCfgGroups()` reads the *old* value and closes the group the click just opened.
-     Fix is to persist the intent directly instead of relying on the event, and to drop the
-     `applyCfgGroups()` call, which that handler does not need.
-     (An earlier note here claimed a probe in this session independently confirmed this.
-     It did not — that probe failed because `#cfg > details` was closed, and `details.open`
-     stuck once it was opened. Claim withdrawn.)
-  3. a 4px gap between ✎ and ✕ in two row types
-  4. a 17px holiday on/off checkbox
-  5. the net-setup link's one-way scroll trip
-  6. a toast that covers editor buttons
 
-  Anything else from that audit is not written down anywhere durable. If the count matters,
-  re-run the interaction audit rather than trusting a remembered total.
+  **The four remaining behavioural findings** went in v93, each verified by putting the bug
+  back and watching the new test fail:
+
+  - **"Change in Settings" collapsed the group it opened.** A race, not a stale read:
+    `xSchedEdit` did `g.open = true` then `applyCfgGroups()` on the next line, and the spec
+    fires `toggle` on a `<details>` *asynchronously*, so the listener that persists the new
+    state had not run and `applyCfgGroups()` read the old value and shut the group. Now the
+    intent is persisted directly and the `applyCfgGroups()` call is gone — the handler never
+    needed it. Guarded in `cfggroups.mjs`.
+  - **The 4px ✎/✕ gap was in three row types, not two** — vacation, holiday and absence —
+    plus the shift log's "Delete? yes / no", where a mis-tap deletes a shift. All four wrap
+    in `.rowacts`, which carries a 12px gap and nothing else so it can be dropped around an
+    existing pair without disturbing the row.
+  - **The 17px holiday checkbox** has a 44px label around it; the box stays 17px. The
+    important half is that the rule which should have caught it is now app-wide — see the
+    note on fixture coverage above.
+  - **The net-setup one-way trip.** `closeNetSetup()` now returns you to where you were.
+    Measured: left 5543, came back to 5543; without it you land at 101.
+
+  **Open, and cosmetic only:** the toast overlaps editor buttons. `.toast` already carries
+  `pointer-events:none`, so taps pass through and the button is *reachable* — it is obscured
+  for about three seconds, not blocked. Left alone rather than contorting the layout; revisit
+  only if the obscuring itself is judged worth it.
+
+  One test was deleted rather than kept: a check in `cfggroups.mjs` that the schedule field
+  was "on screen" passed *with the bug present* and the group reporting closed, so it
+  discriminated nothing. Same fault as the `carryin` assertion noted above. A green
+  assertion that cannot fail for the right reason is worse than no assertion.
 
   *Copy:* 3,940 words on screen, ~2,440 achievable. Settings alone is 1,856 words, 1,177 of
   them prose. Three pieces of copy were simply **wrong** and are fixed. The four sections

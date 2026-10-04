@@ -331,6 +331,11 @@
   button.mini{cursor:pointer;font-family:inherit;background:rgba(130,155,200,.1);color:var(--muted);border:1px solid var(--border);
     border-radius:9px;padding:6px 12px;font-size:12.4px;font-weight:700;transition:.2s}
   button.mini:hover{color:var(--ink);border-color:var(--acc)}
+  /* Two finger-sized targets separated by a single space of text — about 4px — where one of
+     them deletes something, is a coin flip on a phone. The gap is the whole point of this
+     class; it carries no other styling, so it can wrap an existing pair without disturbing
+     the row it sits in. */
+  .rowacts{display:inline-flex;align-items:center;gap:12px}
   button.mini.danger{color:var(--bad);border-color:rgba(255,93,108,.42)}
   button.mini.danger:hover{color:var(--bad);border-color:var(--bad);background:rgba(255,93,108,.13)}
   button.btn.add{border-color:var(--ok);background:linear-gradient(180deg,rgba(81,224,138,.22),rgba(81,224,138,.06));
@@ -732,6 +737,11 @@
   .holrow{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:9px;align-items:center;
     padding:9px 0;border-top:1px solid var(--border);font-size:13.2px}
   .holrow .hon{width:17px;height:17px;accent-color:var(--acc);cursor:pointer}
+  /* The box stays 17px — that is what a checkbox looks like — and the label around it is
+     the target. Without the label there was no target but the box itself, so switching a
+     holiday on or off was a 17px tap. */
+  .holrow .honwrap{display:inline-flex;align-items:center;justify-content:center;
+    min-width:44px;min-height:44px;cursor:pointer}
   .holrow .hnm{font-weight:700;color:var(--ink)}
   .holrow.off .hnm{color:var(--muted);text-decoration:line-through}
   .holrow .hwhen{color:var(--muted);font-size:12.4px;text-align:right;font-variant-numeric:tabular-nums}
@@ -5981,7 +5991,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v92';
+var APP_BUILD = 'v93';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -6643,7 +6653,7 @@ function renderVacList(){
       + '<div class="vsub">' + fdateY(ymd(v.from)) + ' – ' + fdateY(ymd(v.to)) + ' · '
       + days + ' rostered day' + (days === 1 ? '' : 's') + ' · ' + hours.toFixed(2) + ' h'
       + (v.ot ? '' : ' · flat, no OT credit') + '</div></div>'
-      + '<div><button class="mini" data-vedit="' + esc(v.id) + '">✎</button> '
+      + '<div class="rowacts"><button class="mini" data-vedit="' + esc(v.id) + '">✎</button>'
       + '<button class="mini danger" data-vdel="' + esc(v.id) + '">✕</button></div></div>';
   }).join('') : '<div class="holnone">No vacation booked.</div>';
 }
@@ -6714,13 +6724,14 @@ function renderHolidayList(){
   el('cHolList').innerHTML = list.length ? list.map(function(h, i){
     var d = holidayDate(h, y);
     return '<div class="holrow' + (h.on === false ? ' off' : '') + '">'
-      + '<input type="checkbox" class="hon" data-hon="' + i + '"' + (h.on === false ? '' : ' checked')
-      + ' aria-label="' + esc(h.name) + ' switched on">'
+      + '<label class="honwrap"><input type="checkbox" class="hon" data-hon="' + i + '"'
+      + (h.on === false ? '' : ' checked')
+      + ' aria-label="' + esc(h.name) + ' switched on"></label>'
       + '<span class="hnm">' + esc(h.name) + '</span>'
       + '<span class="hotf">' + (h.ot === false ? '' : 'OT') + '</span>'
       + '<span class="hwhen">' + esc(holidayRuleText(h))
       + (d ? '<br>' + fdate(d) + ' ' + y : '') + '</span>'
-      + '<span><button class="mini" data-hedit="' + i + '">✎</button> '
+      + '<span class="rowacts"><button class="mini" data-hedit="' + i + '">✎</button>'
       + '<button class="mini danger" data-hdel="' + i + '">✕</button></span>'
       + '</div>';
   }).join('') : '<div class="holnone">No paid holidays. Add one, or put the standard six back.</div>';
@@ -8087,11 +8098,11 @@ function renderLog(ledger, period, active, now){
       + '<td class="act">' + (s.gap
             ? '<button class="mini" data-gap="' + s.gapMs + '">Why?</button>'
           : s.abs
-            ? '<button class="mini" data-absedit="' + s.absId + '">✎</button> '
-              + '<button class="mini danger" data-absdel="' + s.absId + '">✕</button>'
+            ? '<span class="rowacts"><button class="mini" data-absedit="' + s.absId + '">✎</button>'
+              + '<button class="mini danger" data-absdel="' + s.absId + '">✕</button></span>'
           : !synth && !s.live && asking
-            ? 'Delete? <button class="mini danger" data-del-yes="' + s.id + '">yes</button> '
-              + '<button class="mini" data-del-no="1">no</button>'
+            ? 'Delete? <span class="rowacts"><button class="mini danger" data-del-yes="' + s.id + '">yes</button>'
+              + '<button class="mini" data-del-no="1">no</button></span>'
             : '') + '</td></tr>';
   });
   /* Footer cells carry the same names as the columns they total, so anything reading them
@@ -8723,8 +8734,16 @@ document.getElementById('xSchedEdit').onclick = function(){
   if (outer) outer.open = true;
   var g = document.getElementById('gSched');
   if (!g) return;
+  /* This used to open the group and then call applyCfgGroups() on the very next line,
+     which closed it again.
+
+     `toggle` on a <details> is fired asynchronously by the spec, so the listener that
+     persists the new state had not run yet; applyCfgGroups() read the *old* stored value
+     and shut the group this click had just opened. Persist the intent here rather than
+     waiting on an event that has not happened, and drop the applyCfgGroups() call — every
+     other group is already in its stored state and does not need reapplying. */
+  var u = uiOpen(); u.cfg = u.cfg || {}; u.cfg.gSched = true; save();
   g.open = true;
-  applyCfgGroups();
   try { g.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   catch (e){ g.scrollIntoView(); }
   var f = document.getElementById('cSchedStart2');
@@ -9361,14 +9380,30 @@ function syncNetForm(){
 
 /* The setup panel lives near the top of the page, so opening it from something far
    below (the calculator) would otherwise change nothing you can see. Bring it to you. */
+/* Where the page was before this panel pulled it ~10,000px upward, so closing it can put
+   you back instead of stranding you at the top of the app. */
+var netSetupReturn = null;
 function openNetSetup(){
   syncNetForm();
   el('taxYearNote').innerHTML = taxYearNote();
+  if (el('netsetup').classList.contains('hide')) netSetupReturn = window.pageYOffset || 0;
   show('netsetup', true);
   try { el('netsetup').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   catch(e){ el('netsetup').scrollIntoView(); }
 }
-function closeNetSetup(){ show('netsetup', false); }
+function closeNetSetup(){
+  show('netsetup', false);
+  /* The trip up here is a one-way one otherwise: the calculator that links to this panel is
+     about ten thousand pixels below it, and closing the panel used to leave you at the top
+     with nothing but a long scroll back to what you were doing. Only read once, so a second
+     close does not fling the page somewhere stale. */
+  if (netSetupReturn != null){
+    var back = netSetupReturn;
+    netSetupReturn = null;
+    try { window.scrollTo({ top: back, behavior: 'smooth' }); }
+    catch(e){ window.scrollTo(0, back); }
+  }
+}
 
 function setPayMode(mode){
   var nc = netCfg();

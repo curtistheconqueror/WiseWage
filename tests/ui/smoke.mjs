@@ -265,6 +265,17 @@ const small=await mob.evaluate(()=>[...document.querySelectorAll('button,input,s
   ok('no two elements share an id', dupes.length === 0, dupes.join(', ') || 'none');
 }
 ok('every control meets the 44px touch minimum', small.length===0, small.join(', '));
+/* The rule above exempts checkboxes, because the box is small by design and the label
+   around it is the target. That exemption only ever had a matching label check inside the
+   Custom Data Sheet — whose comment claimed this suite applied it app-wide, which it did
+   not — so everywhere else a bare checkbox was unguarded. That is how a 17px holiday
+   on/off switch shipped. The rule lives here now, where it covers the whole app. */
+const boxes=await mob.evaluate(()=>[...document.querySelectorAll('input[type=checkbox]')]
+  .filter(x=>x.offsetParent!==null)
+  .map(x=>{ const l=x.closest('label');
+            return (x.id||x.className||'checkbox')+':'+Math.round((l||x).getBoundingClientRect().height); })
+  .filter(s=>+s.split(':')[1] < 44));
+ok('and every checkbox has a label big enough to hit', boxes.length===0, boxes.join(', '));
 await mob.close();
 
 console.log(`\n${fails===0?'✅ ALL CLEAR':'❌ PROBLEMS FOUND'} — ${fails} failure(s)\n`);

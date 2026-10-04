@@ -139,6 +139,7 @@ ok('note offers the real-deductions path', (await p.textContent('#qEditDed')).in
 ok('no "other deductions" line when there are none', !txt.includes('Your other deductions'), txt);
 
 console.log('\nThe note\'s button opens the interview deliberately, and scrolls it into view');
+const wasAt = await p.evaluate(()=>Math.round(window.scrollY));
 await p.click('#qEditDed');
 ok('interview opens on request', await p.isVisible('#netsetup'));
 /* Wait for the scroll to stop, not for a stopwatch.
@@ -162,6 +163,19 @@ ok('and is scrolled into view rather than left off-screen', inView,
    await p.evaluate(()=>Math.round(document.getElementById('netsetup').getBoundingClientRect().top)+'px from top'));
 await p.fill('#nDeps','2');
 await p.click('#nSave');
+/* The trip up here used to be one-way: this panel is ~10,000px above the calculator that
+   links to it, and closing it left you at the top of the app with a long scroll back to
+   whatever you were doing. */
+await p.evaluate(()=>{ window.__scrollWatch = null; });
+await p.waitForFunction(() => {
+  const y = Math.round(window.scrollY);
+  const s = (window.__scrollWatch = window.__scrollWatch || { y: null, still: 0 });
+  if (s.y === y) s.still++; else { s.y = y; s.still = 0; }
+  return s.still >= 3;
+}, null, { timeout: 15000, polling: 100 });
+const backAt = await p.evaluate(()=>Math.round(window.scrollY));
+ok('saving brings you back to where you came from, not the top of the app',
+   Math.abs(backAt - wasAt) < 200, `left ${wasAt}, came back to ${backAt}`);
 await p.waitForTimeout(300);
 await openAll(p);
 note = await p.textContent('#qNetNote');
