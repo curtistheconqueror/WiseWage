@@ -1,0 +1,72 @@
+# The gate. Nothing reaches a phone without passing this.
+#
+# Three layers, cheapest first, so an obvious mistake fails in twenty seconds instead of
+# twenty minutes:
+#
+#   guards  static invariants — version lockstep, unique ids, engine-fence purity   ~2s
+#   engine  the pay maths, extracted verbatim out of index.html                     ~2s
+#   ui      74 browser suites driving the real page, split across five runners      ~5m
+#
+# The UI suites are deliberately serial *within* a runner: several assert on live clocks
+# and running money totals, and two of them sharing a machine report contention as a
+# failure. Sharding is safe because each shard is a separate machine.
+
+name: Checks
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch makes this run pointless; stop paying for it.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guards:
+    name: Guards and pay engine
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Neither of these needs a single dependency installed, which is why they run first
+      # and on their own.
+      - name: Static guards
+        run: node tests/guards.mjs
+      - name: Pay engine
+        run: node tests/pay-engine.test.mjs
+
+  ui:
+    name: UI ${{ matrix.shard }}/5
+    needs: guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      # One shard failing must not hide what the other four would have found.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+    env:
+      # The suites pin the browser's timezone themselves, but several compute their
+      # expected figures in Node. Runners are UTC; the app is used in Chicago.
+      TZ: America/Chicago
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # PW_CHROME is left unset on purpose: every suite falls back to Playwright's own
+      # build, which is the one this install puts in place.
+      - run: npx playwright install --with-deps chromium
+      - name: UI suites
+        run: node tests/run-ui.mjs --shard=${{ matrix.shard }}/5

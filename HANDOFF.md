@@ -4,13 +4,14 @@
 architecture.** This file is the current state and the road ahead. `PLAN.md` is the
 professions/multi-job design and has not changed.
 
-Current build: **v88**. 73 UI suites, 937 engine assertions, all green.
+Current build: **v89**. 18 guards, 937 engine assertions, 74 UI suites / 2,860 assertions —
+all green, and as of now all three run in CI on every push.
 
 ---
 
 ## What this app is, and the three constraints that shape every change
 
-A single-file PWA for tracking hourly pay. One `index.html` (~12,000 lines) with an inline
+A single-file PWA for tracking hourly pay. One `index.html` (~13,500 lines) with an inline
 `<style>` and one `<script>`. No build step, no bundler, no framework, no runtime
 dependencies. Hosted as a static site on GitHub Pages; installed to the Home Screen and used
 almost entirely on an iPhone.
@@ -41,15 +42,33 @@ nobody has to.
 
 ## Testing discipline — read this before you trust a green run
 
-`node tests/pay-engine.test.mjs` runs the engine suite with no dependencies.
+`npm test` runs the guards and the engine suite. Neither needs anything installed and
+together they take about four seconds, so there is no excuse for skipping them.
 `PW_CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome TZ=America/Chicago node
-tests/run-ui.mjs` runs all 73 browser suites and takes ~19 minutes.
+tests/run-ui.mjs` runs all 74 browser suites and takes ~19 minutes.
+
+**CI runs all three on every push and pull request** —
+`.github/workflows/checks.yml`. Until it existed, the tests ran only because whoever
+was writing the code chose to run them, which is the same party the tests are meant to
+check. Two bugs that cost money shipped live and passed every suite under that
+arrangement. If CI is red, the build is not green, whatever a local run said.
 
 **Run exactly one thing at a time.** Several suites assert on live clocks and running
 money totals. Two regressions in parallel, or a suite running alongside a full run, makes
 them fail by a few cents or a second — and those failures look exactly like arithmetic
 bugs. This has already cost more than one wrong diagnosis in this repository. Before
 trusting a result, confirm nothing else is running (`pgrep -c chrome` should be 0).
+
+CI splits the suites with `--shard=N/5`, which does not break that rule: a shard is a
+separate machine and is still serial within itself. Do not use `--shard` to run two
+slices side by side on one box.
+
+**The guards are the cheap half of the gate** (`tests/guards.mjs`). They are static, so
+they catch things a browser suite can miss entirely — an id collision in markup that is
+not currently rendered, a `document` reference on an engine path no test happens to
+execute, a version bump applied to one of the two constants that must match. Each guard
+carries a note saying which real failure put it there. Add to them when something gets
+through; they cost nothing to run.
 
 **A flaky test is worse than a failing one.** Four have been found and fixed here, and
 every one first presented as a money bug:
@@ -155,8 +174,14 @@ iOS and Android**. Today the update path is: push to `main` → GitHub Pages →
 worker fetches network-first → the user may need the in-app refresh button. That works but
 is not written down, and the stuck-cache incident (a device pinned to an old build for over
 a day) happened because of a gap in it. The SOP should cover version bumping (`APP_BUILD`
-in `index.html` and `CACHE` in `sw.js` must match — a test asserts it), the regression gate,
-and what a user does on each platform when an update does not arrive.
+in `index.html` and `CACHE` in `sw.js` must match — nothing enforced that until the guards
+landed; `tests/guards.mjs` now fails the build if they drift), the CI gate, and what a user
+does on each platform when an update does not arrive.
+
+The obvious CI check to add alongside the SOP, deliberately left out until the policy is
+written: **fail a change that edits `index.html` without bumping `APP_BUILD`.** It is easy
+to add — diff against the base ref in the guards job — but gating on a rule nobody has
+written down yet just creates friction, so it belongs with this item rather than before it.
 
 ### 6. TimePeace
 
@@ -173,10 +198,24 @@ session** — the app is on the owner's machine and not in this repository.
   way — but the rate is readable by anyone who finds the repo. Making it private is a
   decision the owner has not yet taken.
 - **The visual overhaul.** The owner's verdict: "entirely too busy", "quirky bugs all over
-  the place", "not ready for production." Two audits are in progress — one for interaction
-  bugs, one for over-long on-screen copy. The copy standard is set: a label that names the
-  thing is usually enough; people know their own employment terms; anything genuinely
-  load-bearing goes behind the existing `helpnote` disclosure rather than on the screen.
+  the place", "not ready for production." Both audits are finished.
+
+  *Interaction bugs:* 12 findings, every one reproduced in a real browser at 390×844. The
+  three that cost money or data are fixed and covered by `tests/ui/editguard.mjs`. **Nine
+  remain**, the worst of them: tapping the ✎ on a floater jumps the page ~994px so the
+  editor opens under a different heading; nothing confirms a Time-off delete; a destructive
+  button in `.bankdot` is 12×14px; two editors can be open at once; a booked day off cannot
+  be edited at all, because the edit branch of `openOffEditor` is unreachable — the only
+  call site passes `null`.
+
+  *Copy:* 3,940 words on screen, ~2,440 achievable. Settings alone is 1,856 words, 1,177 of
+  them prose. Three pieces of copy were simply **wrong** and are fixed. The four sections
+  the owner named are cut. **Roughly 30 edits remain**, mostly in Settings. The standard is
+  set: a label that names the thing is usually enough; people know their own employment
+  terms; anything genuinely load-bearing goes behind the existing `helpnote` disclosure
+  rather than on the screen.
+
+  Order the owner asked for: bugs, then the copy pass.
 - **`vacationOn()` is dead code** — the calendar uses `vacationCredits()` instead.
 - Deductions/NET mode, used-allowance carry-in, and a stray 3.5-second punch remain from
   earlier work.

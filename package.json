@@ -4,9 +4,10 @@
   "private": true,
   "description": "A live earnings clock with overtime and pay-period tracking",
   "scripts": {
-    "test": "node tests/pay-engine.test.mjs",
+    "guards": "node tests/guards.mjs",
+    "test": "node tests/guards.mjs && node tests/pay-engine.test.mjs",
     "test:ui": "node tests/run-ui.mjs",
-    "test:all": "node tests/pay-engine.test.mjs && node tests/run-ui.mjs"
+    "test:all": "npm test && node tests/run-ui.mjs"
   },
   "devDependencies": {
     "playwright": "^1.62.0"

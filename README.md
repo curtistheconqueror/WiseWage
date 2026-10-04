@@ -4,13 +4,13 @@ A live earnings clock. Clock in and watch your pay climb in real time — throug
 
 One self-contained HTML file. No build, no server, no dependencies. Open it and it works, online or off.
 
-> **This branch stands alone.** It shares no history with the rest of the repository and contains only this app, so it can be lifted into its own repository at any time. See [Splitting this out](#splitting-this-out-into-its-own-repo).
+[![Checks](https://github.com/curtistheconqueror/WiseWage/actions/workflows/checks.yml/badge.svg)](https://github.com/curtistheconqueror/WiseWage/actions/workflows/checks.yml)
 
 ## Use it
 
 **On a computer** — download `index.html` and open it. That's it. (Viewing it on GitHub shows the source code rather than the page; that's just how GitHub displays `.html` files.)
 
-**On a phone** — once this branch is served over HTTPS (see [Hosting](#hosting)), open the URL and choose **Add to Home Screen** on iOS, or **Install app** on Android. You get an icon that opens fullscreen with no browser bars and runs with no signal.
+**On a phone** — open the published URL (see [Hosting](#hosting)) and choose **Add to Home Screen** on iOS, or **Install app** on Android. You get an icon that opens fullscreen with no browser bars and runs with no signal.
 
 ## What it does
 
@@ -45,70 +45,79 @@ Change any of them later under **Settings**.
 
 ## Hosting
 
-GitHub Pages serves this branch directly, because the app sits at the branch root:
+GitHub Pages serves this repository directly, because the app sits at the root:
 
-**Settings → Pages → Source: Deploy from a branch → Branch: `pay-clock` / `(root)`**
+**Settings → Pages → Source: Deploy from a branch → Branch: `main` / `(root)`**
+
+Push to `main`, and the published URL has the new build on the next open. That is the whole
+deployment path — there is nothing to compile.
 
 The published URL is what you install from on a phone. Pages on a private repository requires a paid GitHub plan; on a free plan the repository must be public. Nothing personal is in the code either way — your numbers are entered at first run and stay on your device.
 
-## Splitting this out into its own repo
+### If you move it to another URL
 
-This branch is an orphan: no shared history, no files from the parent project, app at the root. Moving it is a push, not a migration.
+Data lives in the browser's storage **per origin** and does not follow a move, so **export a
+backup from the old URL before switching and import it at the new one**. The home-screen icon
+has to be added again as well. The old URL keeps working until Pages is turned off there, so
+the two can overlap for as long as you like.
 
-```sh
-# create an empty repo on GitHub first (no README, no .gitignore, no licence), then:
-git clone --single-branch --branch pay-clock <this-repo-url> wisewage
-cd wisewage
-git remote set-url origin <new-repo-url>
-git branch -m pay-clock main
-git push -u origin main
-```
-
-Full history comes with it, nothing needs rewriting, and the Pages setting moves to `main` / `(root)`.
-
-The empty repo matters: an auto-created README or `.gitignore` gives the new repository a root
-commit of its own, and this branch has no ancestor in common with it — the push is then rejected
-as unrelated history. Starting empty makes it an ordinary first push.
-
-The published URL changes, which means re-adding the home-screen icon once. Data lives in the
-browser's storage per origin and does not follow the move, so **export a backup from the old URL
-before switching and import it at the new one**. The old URL keeps working until Pages is turned
-off there, so there is no rush and nothing is lost if the two overlap for a while.
+One thing to know before you ever consider clearing site data to fix something: GitHub Pages
+serves *every* project you publish from a single origin, so clearing it wipes the stored data
+of all of them. `fresh.html` and the in-app refresh button exist so you never have to.
 
 ## Tests
 
-Two layers. The engine suite needs nothing installed:
+Three layers, cheapest first. The first two need nothing installed:
 
 ```sh
-npm test
+npm test            # guards, then the pay engine
 ```
 
-620 assertions covering period and week boundaries, all five overtime rules, mid-shift
-threshold crossings, overnight and DST-spanning shifts, period rollover, auto-stop targets,
-the SEC/MIN/HR stepping, holidays and banked days off, absences and the make-up rule,
-vacation blocks, the shop-clock offset, the shift differential, the federal tax table, the
-Social Security wage base, and the FLSA qualified-overtime rule.
+**Guards** (18 of them, under a second) are the static invariants the app is built on: that
+the version a user can see and the service worker's cache key agree, that no two elements
+share an id, that the pay engine stays pure and stays ES5, that no external script or
+stylesheet has crept in, and that no API key is committed. Each one is there because
+breaking it has already cost something — see the notes in `tests/guards.mjs`.
+
+**The engine suite** is 937 assertions covering period and week boundaries, all six overtime
+rules, mid-shift threshold crossings, overnight and DST-spanning shifts, period rollover,
+auto-stop targets, the SEC/MIN/HR stepping, holidays and banked days off, absences and the
+make-up rule, vacation blocks, the shop-clock offset, the shift differential, the federal
+tax table, the Social Security wage base, and the FLSA qualified-overtime rule.
 
 It extracts the pay engine directly out of `index.html`, so what is tested is exactly what
 ships — there is no second copy to fall out of sync.
 
-The UI suites drive a real browser, so they need Playwright:
+**The UI suites** drive a real browser, so they need Playwright:
 
 ```sh
 npm install
 npx playwright install chromium
-npm run test:ui                  # every suite
-npm run test:ui -- smoke drive   # only those
-npm run test:all                 # engine, then UI
+npm run test:ui                        # every suite
+npm run test:ui -- smoke drive         # only those
+npm run test:ui -- --shard=2/5         # one slice of five
+npm run test:all                       # guards, engine, then UI
 ```
 
-Fifty-three suites, around 1,500 assertions. Each starts its own static server, seeds
+Seventy-four suites, 2,860 assertions. Each starts its own static server, seeds
 `localStorage`, installs a fixed clock and drives the real page — clocking in and out,
 editing shifts, changing settings, reloading, and checking what is actually on screen at
-phone and desktop sizes. They run one at a time on purpose: browser-driving tests that share
-a machine report contention as failure.
+phone and desktop sizes. A full run takes about seventeen minutes.
+
+**They run one at a time on purpose.** Several assert on live clocks and running money
+totals, so two suites sharing a machine report contention as a money bug. That has already
+caused wrong diagnoses here. `--shard` is for splitting across *separate machines*, which
+is how CI finishes in minutes; never run two shards side by side on one box.
 
 Set `PW_CHROME` to use a particular browser build rather than Playwright's own.
+
+## CI
+
+`.github/workflows/checks.yml` runs all three layers on every push and pull request, and
+can be started by hand from the Actions tab. Guards and the engine go first on their own
+runner and fail in seconds; the 74 UI suites then split across five runners, serial within
+each. Nothing here is optional — it is the only thing standing between a regression and a
+phone.
 
 ## Picking this up
 
@@ -123,8 +132,10 @@ Set `PW_CHROME` to use a particular browser build rather than Playwright's own.
 | `manifest.webmanifest`, `sw.js`, `icons/` | Home-screen install and offline cache |
 | `fresh.html` | Escape hatch: clears the cached app when a stuck copy won't update. Never touches your data |
 | `tools/icon.mjs` | Draws the app icon and writes every size from one source |
+| `tests/guards.mjs` | Static invariants — no dependencies, runs in under a second |
 | `tests/pay-engine.test.mjs` | The engine suite — no dependencies |
 | `tests/ui/`, `tests/run-ui.mjs` | Browser suites and their runner |
+| `.github/workflows/checks.yml` | CI: guards, engine, then the UI suites across five runners |
 
 ### Changing the icon
 
