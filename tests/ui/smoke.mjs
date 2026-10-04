@@ -216,11 +216,34 @@ const touch=await b.newContext({timezoneId:'America/New_York',locale:'en-US',
   viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:3});
 const mob=await touch.newPage();
 await mob.clock.install({time:new Date('2026-07-30T13:00:00Z')});
+/* The fixture has to carry data, not just one shift.
+
+   This rule filters on `offsetParent !== null`, so it only ever measured controls that were
+   actually on the page — and a control that needs data to exist was therefore never
+   measured at all. That is how a 12×14px button that gave away a paid day off shipped
+   under a passing test. Seed an allowance with a day spent, a holiday and a shift, so the
+   per-row controls in those cards are on screen when the tape measure comes out. */
 await mob.addInitScript(([k,v])=>localStorage.setItem(k,JSON.stringify(v)),
-  [KEY, st({sessions:[{id:'m',start:jul(29,9),end:jul(29,17)}]})]);
+  [KEY, st({sessions:[{id:'m',start:jul(29,9),end:jul(29,17)}],
+    cfg:{ banks:[{id:'float',name:'Floater',count:3,hours:8,ot:false}],
+          daysOff:[{id:'d1',bank:'float',date:'2026-07-28',hours:8}],
+          holidays:[{id:'h1',name:'Independence Day',kind:'md',month:7,day:4,on:true}] } })]);
 await mob.goto('http://localhost:8091/'); await mob.waitForTimeout(400); await openAll(mob);
 const of=await mob.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
 ok('no sideways scroll', of<=0, of+'px');
+/* The seeding above is only useful if it really put those rows on the page. Without this,
+   a fixture that quietly failed to render them would leave the rule below passing while
+   measuring nothing — which is the exact failure being fixed, one level up. */
+const seeded=await mob.evaluate(()=>({
+  dayOff:document.querySelectorAll('#bankBody button[data-offedit]').length,
+  holiday:document.querySelectorAll('#cHolList button[data-hedit]').length,
+  // The log has no per-row buttons on purpose: a row is selected by tapping the row
+  // itself, so there is nothing here for the rule below to measure. Checked anyway, so
+  // that a log which rendered nothing at all does not pass for a log with no buttons.
+  logRow:document.querySelectorAll('#logBody tbody tr[data-row]').length}));
+ok('the fixture really rendered a booked day off', seeded.dayOff>0, JSON.stringify(seeded));
+ok('and a holiday row', seeded.holiday>0, JSON.stringify(seeded));
+ok('and a shift row', seeded.logRow>0, JSON.stringify(seeded));
 const small=await mob.evaluate(()=>[...document.querySelectorAll('button,input,select')]
   .filter(b=>b.offsetParent!==null && b.type!=='file' && b.type!=='checkbox')
   .filter(b=>b.getBoundingClientRect().height < 44)

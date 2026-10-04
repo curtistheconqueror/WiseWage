@@ -176,8 +176,11 @@ await p.click('#oSave'); await p.waitForTimeout(500);
 f = await foot(p);
 ok('a sick day adds 8 h', f.includes('53.00'), f);
 ok('but overtime stays at 5 h', f.includes('5.00'), f);
-// swap it for a floater on the same day
-await p.locator('#bankBody button[data-offdel]').first().click(); await p.waitForTimeout(400);
+/* Swap it for a floater on the same day. Giving a day back goes through the editor now:
+   the chip opens it, and the panel carries the button that gives the day up. It used to be
+   one tap on a 12px ✕ in the list, with nothing between a mis-tap and a lost day. */
+await p.locator('#bankBody button[data-offedit]').first().click(); await p.waitForTimeout(300);
+await p.click('#oDel'); await p.waitForTimeout(400);
 await p.click('#offAdd'); await p.waitForTimeout(300);
 await p.selectOption('#oBank','float'); await p.waitForTimeout(250);
 await p.selectOption('#oSlot','0'); await p.fill('#oDate','2026-01-19'); await p.waitForTimeout(300);
@@ -191,7 +194,24 @@ ok('the floater itself stays straight time', rows.find(r=>r.off)?.ot==='—', ro
 console.log('\n━━ Giving one back ━━');
 bk = await banks(p);
 ok('two floaters left while booked', bk[0].left==='2 of 3 left', bk[0].left);
-await p.locator('#bankBody button[data-offdel]').first().click(); await p.waitForTimeout(500);
+await p.locator('#bankBody button[data-offedit]').first().click(); await p.waitForTimeout(300);
+ok('the editor opens on the day you tapped, ready to change it',
+   (await p.textContent('#offTitle')).includes('Change this day off'), await p.textContent('#offTitle'));
+ok('and the save button agrees it is a change, not a booking',
+   (await p.textContent('#oSave')).includes('Save changes'), await p.textContent('#oSave'));
+/* Moving a booked day to another date. None of this could be reached before: the editor
+   supported it, but nothing in the list ever opened it for an existing day, so correcting
+   a date meant giving the day back and booking it again.
+   The second assertion is the one that matters — saveDayOff excludes the day being
+   changed from its own allowance check, so moving a day must not spend a second one. */
+await p.fill('#oDate','2026-01-20'); await p.waitForTimeout(250);
+await p.click('#oSave'); await p.waitForTimeout(500);
+bk = await banks(p);
+ok('the day moved to the new date', bk[0].dots.some(d=>d.includes('Jan 20')), bk[0].dots.join(' | '));
+ok('and moving it did not spend a second one', bk[0].left==='2 of 3 left', bk[0].left);
+
+await p.locator('#bankBody button[data-offedit]').first().click(); await p.waitForTimeout(300);
+await p.click('#oDel'); await p.waitForTimeout(500);
 bk = await banks(p);
 ok('all three back', bk[0].left==='3 of 3 left', bk[0].left);
 ok('the log row is gone', !(await logRows(p)).some(r=>r.off));

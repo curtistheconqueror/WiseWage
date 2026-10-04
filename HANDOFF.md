@@ -4,8 +4,8 @@
 architecture.** This file is the current state and the road ahead. `PLAN.md` is the
 professions/multi-job design and has not changed.
 
-Current build: **v89**. 18 guards, 937 engine assertions, 74 UI suites / 2,860 assertions —
-all green, and as of now all three run in CI on every push.
+Current build: **v90**. 18 guards, 937 engine assertions, 74 UI suites / 2,867 assertions —
+all green, and all three run in CI on every push.
 
 ---
 
@@ -62,6 +62,17 @@ trusting a result, confirm nothing else is running (`pgrep -c chrome` should be 
 CI splits the suites with `--shard=N/5`, which does not break that rule: a shard is a
 separate machine and is still serial within itself. Do not use `--shard` to run two
 slices side by side on one box.
+
+**A rule only covers what the fixture renders.** `smoke.mjs` enforces the 44px touch
+minimum over every `button`, `input` and `select`, but it filters on
+`offsetParent !== null` — so it measured only controls that were actually on the page, and
+its fixture seeded one shift and nothing else. Every control that needs *data* to exist was
+never measured. That is how a 12×14px button that gave away a paid day off shipped under a
+passing test. The fixture now seeds an allowance with a day spent, a holiday and a shift,
+**and asserts it rendered them**, because a fixture that silently fails to populate leaves
+the rule passing while measuring nothing — the same bug one level up. When adding a
+sweeping rule like that, check what the fixture actually puts on screen, and prove the rule
+fails without the fix: removing the fix should make it report `bankdot:27`, and it does.
 
 **The guards are the cheap half of the gate** (`tests/guards.mjs`). They are static, so
 they catch things a browser suite can miss entirely — an id collision in markup that is
@@ -201,12 +212,20 @@ session** — the app is on the owner's machine and not in this repository.
   the place", "not ready for production." Both audits are finished.
 
   *Interaction bugs:* 12 findings, every one reproduced in a real browser at 390×844. The
-  three that cost money or data are fixed and covered by `tests/ui/editguard.mjs`. **Nine
-  remain**, the worst of them: tapping the ✎ on a floater jumps the page ~994px so the
-  editor opens under a different heading; nothing confirms a Time-off delete; a destructive
-  button in `.bankdot` is 12×14px; two editors can be open at once; a booked day off cannot
-  be edited at all, because the edit branch of `openOffEditor` is unreachable — the only
-  call site passes `null`.
+  three that cost money or data are fixed and covered by `tests/ui/editguard.mjs`. Three
+  more went in v90, all on the Floaters card and all with one change: a spent day is now a
+  44px chip that opens the editor, instead of a 12×14px ✕ that deleted on the first tap.
+  That made `openOffEditor`'s edit branch reachable (correcting a date no longer means
+  giving the day back and re-booking), put the delete behind a deliberate panel, and left
+  the card with fewer controls rather than more.
+
+  **Six remain:** tapping the ✎ on a holiday jumps the page ~994px — `holEdit` sits *below*
+  the whole vacation editor in the markup, so `scrollIntoView` lands you beside the Vacation
+  heading, which is the owner's "the entire page drops down to this other section"; two
+  editors can be open at once; "Change in Settings" leaves the target group collapsed
+  because `applyCfgGroups()` re-reads persisted state; a 4px gap between ✎ and ✕ in two row
+  types; a 17px holiday on/off checkbox; the net-setup link's one-way scroll trip; a toast
+  that covers editor buttons.
 
   *Copy:* 3,940 words on screen, ~2,440 achievable. Settings alone is 1,856 words, 1,177 of
   them prose. Three pieces of copy were simply **wrong** and are fixed. The four sections

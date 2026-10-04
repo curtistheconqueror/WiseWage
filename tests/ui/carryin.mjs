@@ -106,13 +106,17 @@ ok('one floater left of three', /1 of 3 left/.test(body), body.slice(0,120));
 ok('two sick days left of five', /2 of 5 left/.test(body), body.slice(0,220));
 ok('and it says where the missing ones went',
    /2 already spent before you started tracking/.test(body), body.slice(0,300));
+/* `actionable` asks whether the chip is itself a button, which is what a chip for a day the
+   app actually recorded now is — tapping it opens that day for changing or giving back.
+   This used to ask whether the chip *contained* a button, which stopped meaning anything
+   the moment the ✕ inside each chip was replaced by the chip itself. */
 const dots = await p.evaluate(() => [...document.querySelectorAll('#bankBody .bankdot')]
   .map(d => ({ carried: d.classList.contains('carried'), free: d.classList.contains('free'),
-               undo: !!d.querySelector('button') })));
+               actionable: d.tagName === 'BUTTON' || !!d.querySelector('button') })));
 ok('the spent ones are drawn as carried', dots.filter(d => d.carried).length === 5,
    String(dots.filter(d => d.carried).length));
-/* The app never watched them go, so there is no record to give back. */
-ok('and none of them offers an undo', dots.filter(d => d.carried).every(d => !d.undo));
+/* The app never watched them go, so there is no record to change or give back. */
+ok('and none of them can be opened', dots.filter(d => d.carried).every(d => !d.actionable));
 ok('the rest are still available', dots.filter(d => d.free).length === 3,
    String(dots.filter(d => d.free).length));
 ok('the folded heading agrees', /3 of 8 left/.test(await txt(p, '#sum_banks')),

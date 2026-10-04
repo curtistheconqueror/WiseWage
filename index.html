@@ -325,6 +325,9 @@
   button.btn:hover{transform:translateY(-2px)}
   button.btn.go{border-color:var(--ok);background:linear-gradient(180deg,rgba(81,224,138,.22),rgba(81,224,138,.06));box-shadow:0 0 24px -8px var(--ok)}
   button.btn.stop{border-color:var(--bad);background:linear-gradient(180deg,rgba(255,93,108,.22),rgba(255,93,108,.06));box-shadow:0 0 24px -8px var(--bad)}
+  /* Destructive, but not the primary action on the panel it sits in — outlined, not filled. */
+  button.btn.danger{border-color:rgba(255,93,108,.42);color:var(--bad);padding:11px 22px;font-size:14.6px}
+  button.btn.danger:hover{border-color:var(--bad);background:rgba(255,93,108,.13)}
   button.mini{cursor:pointer;font-family:inherit;background:rgba(130,155,200,.1);color:var(--muted);border:1px solid var(--border);
     border-radius:9px;padding:6px 12px;font-size:12.4px;font-weight:700;transition:.2s}
   button.mini:hover{color:var(--ink);border-color:var(--acc)}
@@ -836,13 +839,18 @@
   .bankhd b{font-size:14.5px}
   .bankhd .left{font-variant-numeric:tabular-nums;font-weight:800;color:var(--cal-fill)}
   .bankhd .left.none{color:var(--muted)}
-  .bankdots{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px}
+  .bankdots{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
   .bankdot{border:1px solid var(--border);border-radius:8px;padding:5px 9px;font-size:12.2px;
-    color:var(--muted);display:flex;align-items:center;gap:6px}
+    color:var(--muted);display:flex;align-items:center;gap:6px;min-height:44px}
   .bankdot.free{border-color:var(--cal-fill);color:var(--cal-fill);font-weight:700}
   .bankdot .when{color:var(--muted);font-size:11.2px;font-weight:400}
-  .bankdot button{background:none;border:0;color:var(--bad);font:inherit;font-size:12px;
-    cursor:pointer;padding:0 0 0 2px}
+  /* A day you have spent is a button: the whole chip opens it for changing or giving back.
+     It used to carry a 12px ✕ that deleted on the first tap, with no way to correct a date
+     short of deleting and re-booking. The chip is the target now — the finger-sized one. */
+  button.bankdot{font-family:inherit;background:rgba(130,155,200,.1);cursor:pointer;
+    text-align:left}
+  button.bankdot:hover{border-color:var(--acc);color:var(--ink)}
+  .bankdot .pen{color:var(--muted);font-size:13px;margin-left:1px}
   .banknote{color:var(--muted);font-size:12.4px;margin-top:8px}
   .offlbl{color:var(--acc);font-size:10.5px;font-weight:800}
   .offpill{color:var(--acc);border:1px solid var(--acc);border-radius:5px;padding:1px 5px;
@@ -1872,6 +1880,9 @@
       <div class="eactions">
         <button class="btn go" id="oSave">Book it</button>
         <button class="btn ghost" id="oCancel">Cancel</button>
+        <!-- Only shown when changing a day already booked. Giving a day back used to happen
+             on one tap of a 12px ✕ in the list; it now needs this panel to be open. -->
+        <button class="btn danger hide" id="oDel">Give it back</button>
       </div>
     </div>
     </div>
@@ -5965,7 +5976,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v89';
+var APP_BUILD = 'v90';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -6407,15 +6418,18 @@ function renderBanks(){
       /* Named slots, because knowing you still have your birthday but have spent MLK is
          the whole point of tracking these rather than counting them. */
       dots = bankSlots(cfg, b.id, y).map(function(sl){
-        return '<span class="bankdot' + (sl.used ? '' : ' free') + '">' + esc(sl.name)
-          + (sl.used ? '<span class="when">' + fdate(ymd(sl.used.date)) + '</span>'
-                     + '<button data-offdel="' + esc(sl.used.id) + '" aria-label="Give back ' + esc(sl.name) + '">✕</button>'
-                     : '') + '</span>';
+        if (!sl.used) return '<span class="bankdot free">' + esc(sl.name) + '</span>';
+        return '<button class="bankdot" data-offedit="' + esc(sl.used.id) + '"'
+          + ' aria-label="Change or give back ' + esc(sl.name) + ', ' + esc(fdate(ymd(sl.used.date))) + '">'
+          + esc(sl.name) + '<span class="when">' + fdate(ymd(sl.used.date)) + '</span>'
+          + '<span class="pen" aria-hidden="true">✎</span></button>';
       }).join('');
     } else {
       dots = used.map(function(d){
-        return '<span class="bankdot">' + esc(b.name) + '<span class="when">'
-          + fdate(ymd(d.date)) + '</span><button data-offdel="' + esc(d.id) + '">✕</button></span>';
+        return '<button class="bankdot" data-offedit="' + esc(d.id) + '"'
+          + ' aria-label="Change or give back this ' + esc(b.name) + ', ' + esc(fdate(ymd(d.date))) + '">'
+          + esc(b.name) + '<span class="when">' + fdate(ymd(d.date)) + '</span>'
+          + '<span class="pen" aria-hidden="true">✎</span></button>';
       }).join('');
       for (var i = 0; i < left; i++) dots += '<span class="bankdot free">available</span>';
     }
@@ -6474,6 +6488,10 @@ function openOffEditor(id){
   offEditing = id || null;
   var cur = (cfg.daysOff || []).filter(function(d){ return d.id === offEditing; })[0];
   el('offTitle').textContent = cur ? 'Change this day off' : 'Book a day off';
+  /* The title said "Change this day off" while the button still said "Book it", and there
+     was no way to give the day back from in here at all. */
+  el('oSave').textContent = cur ? 'Save changes' : 'Book it';
+  show('oDel', !!cur);
   el('oBank').innerHTML = (cfg.banks || []).map(function(b){
     return '<option value="' + esc(b.id) + '">' + esc(b.name) + '</option>';
   }).join('');
@@ -10176,13 +10194,20 @@ document.getElementById('oDate').onchange = syncOffForm;
   document.getElementById(id).addEventListener('input', paintOffPreview);
 });
 document.getElementById('bankBody').addEventListener('click', function(e){
-  var btn = e.target.closest('button[data-offdel]'); if (!btn) return;
-  var id = btn.dataset.offdel, cfg = state.cfg;
-  var gone = (cfg.daysOff || []).filter(function(d){ return d.id === id; })[0];
-  cfg.daysOff = (cfg.daysOff || []).filter(function(d){ return d.id !== id; });
-  save(); renderBanks(); drawCal(true); render();
-  if (gone) toast(dayOffName(cfg, gone) + ' given back — it is available again.');
+  var btn = e.target.closest('button[data-offedit]'); if (!btn) return;
+  openOffEditor(btn.dataset.offedit);
 });
+/* Giving a day back is reachable only from the open editor, so it takes a deliberate trip
+   rather than one stray tap in a list of chips. */
+document.getElementById('oDel').onclick = function(){
+  var cfg = state.cfg, id = offEditing;
+  var gone = (cfg.daysOff || []).filter(function(d){ return d.id === id; })[0];
+  if (!gone){ show('offEdit', false); offEditing = null; renderBanks(); return; }
+  cfg.daysOff = (cfg.daysOff || []).filter(function(d){ return d.id !== id; });
+  show('offEdit', false); offEditing = null;
+  save(); renderBanks(); drawCal(true); render();
+  toast(dayOffName(cfg, gone) + ' given back — it is available again.');
+};
 
 document.getElementById('cBankList').addEventListener('change', function(e){
   var t = e.target, cfg = state.cfg, banks = cfg.banks || (cfg.banks = []);
