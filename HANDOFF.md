@@ -4,7 +4,7 @@
 architecture.** This file is the current state and the road ahead. `PLAN.md` is the
 professions/multi-job design and has not changed.
 
-Current build: **v90**. 18 guards, 937 engine assertions, 74 UI suites / 2,867 assertions —
+Current build: **v91**. 18 guards, 937 engine assertions, 74 UI suites / 2,870 assertions —
 all green, and all three run in CI on every push.
 
 ---
@@ -219,13 +219,34 @@ session** — the app is on the owner's machine and not in this repository.
   giving the day back and re-booking), put the delete behind a deliberate panel, and left
   the card with fewer controls rather than more.
 
-  **Six remain:** tapping the ✎ on a holiday jumps the page ~994px — `holEdit` sits *below*
-  the whole vacation editor in the markup, so `scrollIntoView` lands you beside the Vacation
-  heading, which is the owner's "the entire page drops down to this other section"; two
-  editors can be open at once; "Change in Settings" leaves the target group collapsed
-  because `applyCfgGroups()` re-reads persisted state; a 4px gap between ✎ and ✕ in two row
-  types; a 17px holiday on/off checkbox; the net-setup link's one-way scroll trip; a toast
-  that covers editor buttons.
+  The ✎ jump went in v91. `holEdit` sat below the Paid days off and Vacation sections and
+  below the vacation editor — three sections from the ✎ that opens it — so the smallest
+  scroll that could reveal it was ~755px and it surfaced beneath the Vacation heading. It
+  now sits under its own list, the way `vacEdit` always did. Measured at 390×844: the jump
+  fell 755px → 446px and the tapped row stays (just) in view.
+
+  **It is reduced, not eliminated.** The panel is 569px in an 844px window and sits below
+  the list, so some scroll is unavoidable; shortening that panel belongs to the copy pass.
+  Anchoring the scroll on the tapped row was tried and is worse — the row stays visible but
+  Save lands 64px below the fold, because row + list + 569px panel is 907px. Save wins.
+  `holiday1.mjs` guards this by **DOM order, not pixels**, since position is the thing that
+  regresses; verified failing on the old layout (`editor:12, vacList:9`).
+
+  **Still open**, and this is the list rather than a count, because the original tally of
+  twelve was summarised rather than itemised and the arithmetic no longer reconciles — trust
+  these six, not a number:
+
+  1. two editors can be open at once
+  2. "Change in Settings" leaves the target group collapsed — `applyCfgGroups()` re-reads
+     persisted state. Confirmed twice over: it also defeated a probe here that set
+     `details.open` directly, which is how it was re-found
+  3. a 4px gap between ✎ and ✕ in two row types
+  4. a 17px holiday on/off checkbox
+  5. the net-setup link's one-way scroll trip
+  6. a toast that covers editor buttons
+
+  Anything else from that audit is not written down anywhere durable. If the count matters,
+  re-run the interaction audit rather than trusting a remembered total.
 
   *Copy:* 3,940 words on screen, ~2,440 achievable. Settings alone is 1,856 words, 1,177 of
   them prose. Three pieces of copy were simply **wrong** and are fixed. The four sections

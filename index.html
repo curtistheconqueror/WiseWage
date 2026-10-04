@@ -2561,6 +2561,41 @@
         </select>
       </div>
       <div class="note" style="margin-top:6px">Replaces the list above.</div>
+      <!-- Directly under the list it edits, which is the whole point: this used to sit
+           below the Paid days off and Vacation sections and below the vacation editor,
+           three sections away from the ✎ that opens it. scrollIntoView then threw the
+           page ~1000px down and the editor appeared beneath the Vacation heading, so
+           editing a holiday looked like the app had jumped somewhere else entirely. -->
+      <div class="editor hide" id="holEdit">
+        <div class="etitle" id="holTitle">Add a holiday</div>
+        <div class="egrid">
+          <div class="f"><label for="hName">Name</label><input type="text" id="hName" placeholder="e.g. Good Friday"></div>
+          <div class="f"><label for="hKind">Falls on</label>
+            <select id="hKind">
+              <option value="md">The same date every year</option>
+              <option value="nth">A weekday of a month</option>
+              <option value="on">One specific date</option>
+            </select></div>
+          <div class="f" id="fhMonth"><label for="hMonth">Month</label><select id="hMonth"></select></div>
+          <div class="f" id="fhDay"><label for="hDay">Day of month</label>
+            <input type="number" id="hDay" min="1" max="31" step="1" value="1"></div>
+          <div class="f hide" id="fhNth"><label for="hNth">Which one</label>
+            <select id="hNth">
+              <option value="1">1st</option><option value="2">2nd</option><option value="3">3rd</option>
+              <option value="4">4th</option><option value="-1">Last</option>
+            </select></div>
+          <div class="f hide" id="fhDow"><label for="hDow">Weekday</label><select id="hDow"></select></div>
+          <div class="f hide" id="fhDate"><label for="hDate">Date</label><input type="date" id="hDate"></div>
+          <div class="f"><label for="hOt">Counts toward overtime</label>
+            <select id="hOt"><option value="1">Yes</option><option value="0">No</option></select></div>
+        </div>
+        <div class="epreview" id="hPreview"></div>
+        <div class="eerr hide" id="hErr"></div>
+        <div class="eactions">
+          <button class="btn go" id="hSave">Save</button>
+          <button class="btn ghost" id="hCancel">Cancel</button>
+        </div>
+      </div>
       <div class="f" style="margin-top:18px"><label>Paid days off</label></div>
       <div id="cBankList"></div>
       <div class="actions" style="justify-content:flex-start;margin-top:10px">
@@ -2593,36 +2628,6 @@
         <div class="eactions">
           <button class="btn go" id="vSave">Save</button>
           <button class="btn ghost" id="vCancel">Cancel</button>
-        </div>
-      </div>
-      <div class="editor hide" id="holEdit">
-        <div class="etitle" id="holTitle">Add a holiday</div>
-        <div class="egrid">
-          <div class="f"><label for="hName">Name</label><input type="text" id="hName" placeholder="e.g. Good Friday"></div>
-          <div class="f"><label for="hKind">Falls on</label>
-            <select id="hKind">
-              <option value="md">The same date every year</option>
-              <option value="nth">A weekday of a month</option>
-              <option value="on">One specific date</option>
-            </select></div>
-          <div class="f" id="fhMonth"><label for="hMonth">Month</label><select id="hMonth"></select></div>
-          <div class="f" id="fhDay"><label for="hDay">Day of month</label>
-            <input type="number" id="hDay" min="1" max="31" step="1" value="1"></div>
-          <div class="f hide" id="fhNth"><label for="hNth">Which one</label>
-            <select id="hNth">
-              <option value="1">1st</option><option value="2">2nd</option><option value="3">3rd</option>
-              <option value="4">4th</option><option value="-1">Last</option>
-            </select></div>
-          <div class="f hide" id="fhDow"><label for="hDow">Weekday</label><select id="hDow"></select></div>
-          <div class="f hide" id="fhDate"><label for="hDate">Date</label><input type="date" id="hDate"></div>
-          <div class="f"><label for="hOt">Counts toward overtime</label>
-            <select id="hOt"><option value="1">Yes</option><option value="0">No</option></select></div>
-        </div>
-        <div class="epreview" id="hPreview"></div>
-        <div class="eerr hide" id="hErr"></div>
-        <div class="eactions">
-          <button class="btn go" id="hSave">Save</button>
-          <button class="btn ghost" id="hCancel">Cancel</button>
         </div>
       </div>
         </div>
@@ -5976,7 +5981,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v90';
+var APP_BUILD = 'v91';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -6773,7 +6778,23 @@ function openHolEditor(i){
   show('hErr', false);
   syncHolKind();
   show('holEdit', true);
-  el('holEdit').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  /* `nearest` scrolls the least that makes the whole panel visible, which is the right
+     amount — the panel is 569px in an 844px window, so it fits with room over.
+
+     What used to make this feel like the app had jumped somewhere else was not the scroll:
+     it was that this panel sat below the Paid days off and Vacation sections, three
+     sections from the ✎ that opens it, so the least possible scroll was still ~755px and
+     landed under the Vacation heading. It lives under its own list now.
+
+     Anchoring on the tapped row instead was tried and is worse: the row stays in sight, but
+     the row plus the rest of the list plus a 569px panel is 907px, so Save ends up 64px
+     below the fold. A form you cannot submit beats no context, and `holTitle` names the
+     holiday anyway. Nothing scrolls when the panel is already fully on screen. */
+  var ed = el('holEdit'), box = ed.getBoundingClientRect();
+  if (box.top < 0 || box.bottom > window.innerHeight){
+    try { ed.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    catch (e){ ed.scrollIntoView(); }
+  }
 }
 function saveHoliday(){
   var h = holFromForm();

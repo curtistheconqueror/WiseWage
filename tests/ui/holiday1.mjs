@@ -173,6 +173,32 @@ console.log('\n━━ Editing and removing ━━');
 await p.locator('#cHolList button[data-hedit]').nth(0).click(); await p.waitForTimeout(300);
 ok('the editor opens on that holiday', (await p.inputValue('#hName'))==="New Year's Day",
    await p.inputValue('#hName'));
+/* The editor belongs directly under the list it edits.
+
+   It used to sit below the Paid days off and Vacation sections and below the vacation
+   editor, three sections from the ✎ that opens it. The smallest scroll that could show it
+   was ~755px and it surfaced beneath the Vacation heading, so editing a holiday looked
+   like the app had jumped somewhere else. Position is the fix, so position is what this
+   asserts — a DOM-order check rather than a pixel count, because it is the thing that
+   actually regresses. */
+{
+  const order = await p.evaluate(() => {
+    const kids = [...document.querySelectorAll('#gOff .cfgbody > *')];
+    const at = sel => kids.findIndex(k => k.matches(sel) || k.querySelector(sel));
+    return { list: at('#cHolList'), editor: at('#holEdit'), vacList: at('#cVacList') };
+  });
+  ok('the holiday editor sits after its own list', order.editor > order.list,
+     JSON.stringify(order));
+  ok('and before the vacation section, not three sections past it',
+     order.vacList < 0 || order.editor < order.vacList, JSON.stringify(order));
+  // Whatever the scroll does, the button that saves the form has to be reachable.
+  const save = await p.evaluate(() => {
+    const r = document.getElementById('hSave').getBoundingClientRect();
+    return { onScreen: r.bottom > 0 && r.bottom <= innerHeight + 1, bottom: Math.round(r.bottom),
+             vh: innerHeight };
+  });
+  ok('and opening it leaves Save on screen', save.onScreen, JSON.stringify(save));
+}
 await p.fill('#hName','New Year'); await p.selectOption('#hOt','0'); await p.waitForTimeout(200);
 await p.click('#hSave'); await p.waitForTimeout(400);
 ok('the rename sticks', (await p.textContent('#cHolList')).includes('New Year'));
