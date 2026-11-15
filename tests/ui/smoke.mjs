@@ -98,7 +98,17 @@ await boot('2026-07-30T21:00:00Z', st({activeStart:jul(27,9)}));
 const h=(new Date(2026,6,30,17)-new Date(2026,6,27,9))/3600000;
 ok(`${h} h shift does not crash`, await page.isVisible('#hero'));
 ok('timer shows the full span', (await T('#timer')).startsWith('80:'), await T('#timer'));
-ok('80 h rule caught it', (await T('#p80Note')).includes('80 h'), await T('#p80Note'));
+/* This used to assert that an 80-hour live punch tripped the 80 h period rule. It no
+   longer does, and that is the point: a punch past a day on the clock has its accrual
+   capped at the end the banner is offering, so eighty hours nobody worked are no longer
+   counted toward anything. The 80 h rule itself is still covered, properly, in section 5
+   below — reached through banked shifts, which is how anyone actually reaches it.
+
+   What matters here is that the figure is frozen while the timer stays honest. */
+ok('the period figure is capped, not counting eighty hours',
+   (await N('#cumeGross')) < 80 * 38 * 0.5, await T('#cumeGross'));
+ok('and the note does not announce a threshold those hours never reached',
+   !(await T('#p80Note')).includes('passed'), await T('#p80Note'));
 ok('never claims "passed" while showing 0.00 h of OT',
    !((await T('#p80Note')).includes('passed') && (await T('#p80Note')).includes('0.00 h so far')), await T('#p80Note'));
 /* An 80-hour punch is now questioned rather than banked in silence — this is the exact
@@ -114,7 +124,10 @@ ok('it offers to end it at the rostered time',
    (await T('#forgotFix')).startsWith('End it at'), await T('#forgotFix'));
 await page.click('#punch'); await page.waitForTimeout(400);
 ok('clocking out banks it across days', (await page.locator('#logBody tbody tr').count())>=1);
-ok('OT priced in', await N('#cumeGross') > 80*38, await T('#cumeGross'));
+/* Tapping through the question banks the punch AS IT STANDS — the user's choice, and once
+   banked it is a real logged shift again, priced in full with its overtime. The cap only
+   ever applied to a shift still running and still unanswered. */
+ok('and once banked by hand it is priced in full', await N('#cumeGross') > 80*38, await T('#cumeGross'));
 
 console.log('\n━━ 5. Crossing 80 h mid-shift on the period rule ━━');
 // 78 h banked; clock in and run 4 h. 2 straight, 2 OT.

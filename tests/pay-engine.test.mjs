@@ -49,6 +49,7 @@ const E = new Function(m[1] + `
            contractCfg, stipendTotal, contractProgress, chequesPaid, contractView,
            oteRand, otePeriodSamples, oteAllSamples, oteDrawPool, oteForecast, OTE_MIN_SAMPLES,
            forgottenShift, FORGOT_FALLBACK_H, shiftShape,
+           schedOutAt, autoOutAt, runawayOutAt, shiftCutAt, otAskUntil, RUNAWAY_H,
            pctSplit, itemBasis,
            fedNotWithheld, netBreakdown, periodNetView,
            TAX_YEAR, TAX2026, bracketTax, fedWithholding };
@@ -3170,6 +3171,108 @@ group('Robustness');
      E.fedWithholding(3022.40, 26, 'hoh', 0) > E.fedWithholding(3022.40, 26, 'married', 0));
   near('an unknown filing status falls back to single',
        E.fedWithholding(3022.40, 26, 'nonsense', 0), per);
+}
+
+/* ================== ending a shift nobody ended ==================
+   The real incident this is built from: a clock left running for weeks, counting thousands
+   of dollars nobody earned, because the owner believed a scheduled end of 22:30 would stop
+   it. Nothing used that end to stop anything, and the banner that noticed only ever asked
+   while the clock kept climbing behind the question. */
+{
+  const c = { rate: 37.78, otMode: 'eight40', otMultiplier: 1.5, weeklyThreshold: 40,
+              schedStart: '14:00', schedEnd: '22:30', autoOut: true,
+              workDays: [true,true,true,true,true,false,false],
+              holidays: [], banks: [], daysOff: [], vacations: [],
+              periodAnchor: '2026-08-09', periodLengthDays: 14, payDateOffsetDays: 13 };
+  const off = Object.assign({}, c, { autoOut: false });
+  const at = (d, h, mi) => +new Date(2026, 7, d, h, mi || 0);
+  const IN = at(12, 14);                               // Wed 12 Aug, 2 PM — a rostered day
+
+  /* ---- the end somebody chose ---- */
+  ok('the rostered end of the shift day', E.schedOutAt(IN, c) === at(12, 22, 30),
+     String(new Date(E.schedOutAt(IN, c))));
+  ok('and it is only acted on when asked for', E.autoOutAt(IN, off) === null);
+  ok('asked for, it is the same end', E.autoOutAt(IN, c) === at(12, 22, 30));
+  ok('no schedule to judge by means no cut',
+     E.schedOutAt(IN, Object.assign({}, c, { schedEnd: '' })) === null);
+  ok('a day off the roster is not cut to a roster it is not on',
+     E.schedOutAt(at(15, 14), c) === null);            // Sat 15 Aug
+  /* Clocking in during the evening on a nine-to-five roster: that day's end is already
+     behind the punch, and cutting backwards would bin the whole shift. */
+  ok('an end already behind the punch is not offered',
+     E.schedOutAt(at(12, 20), Object.assign({}, c, { schedStart: '09:00', schedEnd: '17:00' })) === null);
+
+  /* ---- mid-shift, nothing is cut ---- */
+  ok('an hour in, nothing happens',   E.shiftCutAt(IN, at(12, 15), c, []) === null);
+  ok('right up to the end, nothing',  E.shiftCutAt(IN, at(12, 22, 29), c, []) === null);
+  const onTime = E.shiftCutAt(IN, at(12, 22, 30), c, []);
+  ok('at the scheduled end it is cut there', onTime && onTime.at === at(12, 22, 30)
+     && onTime.why === 'sched', JSON.stringify(onTime));
+
+  /* ---- the floor nobody can switch off ----
+     This is the case that actually happened. Auto-out OFF, no history to judge by, and the
+     app reopened long afterwards: the shift must still be cut, because no setting makes
+     counting a three-week punch correct. */
+  ok('with auto-out off, a normal long day is left alone',
+     E.shiftCutAt(IN, at(13, 1), off, []) === null);   // 11 h in
+
+  /* ---- a runaway is NOT banked, on purpose ----
+     Writing a shift nobody confirmed is the one thing this app has always refused to do:
+     `shortcut` asserts a day-long punch stays open, `smoke` that eighty hours are never
+     banked silently. Both are right — the end would be a guess, and a guess written into a
+     pay record is worse than an open question. So the runaway gets its figure frozen while
+     the banner asks, and `runawayOutAt` is what says where to freeze it. */
+  ok('a punch running for weeks is still not banked',
+     E.shiftCutAt(IN, at(31, 9), off, []) === null);
+  const frozen = E.runawayOutAt(IN, at(31, 9), off, []);   // reopened 19 days later
+  ok('but there is an end to freeze the figure at', frozen != null, String(frozen));
+  /* With no history, the roster is the best end available — far better than the flat cap. */
+  ok('and it is the rostered finish', frozen === at(12, 22, 30), String(new Date(frozen)));
+  const hours = (frozen - IN) / 3600000;
+  ok('which is 8.5 h, not 451', Math.abs(hours - 8.5) < 0.001, hours.toFixed(2) + ' h');
+  ok('nothing is frozen before a full day has passed',
+     E.runawayOutAt(IN, at(13, 1), off, []) === null);
+
+  /* What the old behaviour would have banked, for the record. */
+  const runawayHours = (at(31, 9) - IN) / 3600000;
+  ok('the punch it replaces was 451 h', Math.abs(runawayHours - 451) < 1, runawayHours.toFixed(0) + ' h');
+
+  /* No roster at all: the flat cap still applies rather than nothing. */
+  const bare = { rate: 20, otMode: 'weekly', weeklyThreshold: 40, otMultiplier: 1.5,
+                 holidays: [], banks: [], daysOff: [], vacations: [],
+                 periodAnchor: '2026-08-09', periodLengthDays: 14, payDateOffsetDays: 13 };
+  const capped = { at: E.runawayOutAt(IN, at(20, 9), bare, []) };
+  ok('with no schedule at all there is still an end to freeze at', capped.at != null,
+     String(capped.at));
+  /* Not the 24 h cap: with no roster and no history the forgotten-shift detector already
+     has a defended answer — its 14 h fallback — and a tighter end is a better one. The cap
+     is the last resort behind that, not the first. */
+  ok('back to the no-history fallback, which is tighter than the cap',
+     capped && Math.abs(capped.at - (IN + E.FORGOT_FALLBACK_H * 3600000)) < 1000,
+     capped && String((capped.at - IN) / 3600000) + ' h');
+  ok('and the cap is the backstop behind it', E.RUNAWAY_H > E.FORGOT_FALLBACK_H,
+     E.RUNAWAY_H + ' vs ' + E.FORGOT_FALLBACK_H);
+
+  /* History beats the roster, because somebody who works eleven hours every night did not
+     leave at half past ten and offering that would throw real work away. */
+  const hist = [];
+  for (let d = 3; d <= 10; d++) hist.push({ start: at(d, 14), end: at(d, 1 + 24) });
+  const shaped = E.runawayOutAt(IN, at(31, 9), off, hist);
+  ok('with history, the freeze follows the pattern not the roster',
+     shaped > at(12, 22, 30), String(new Date(shaped)));
+
+  /* ---- how long the question stays up ----
+     "it should stay primed for at least up until i get ready for my regular shift time the
+     next day so it can't be missed" */
+  ok('until the next rostered start', E.otAskUntil(at(12, 22, 30), c) === at(13, 14),
+     String(new Date(E.otAskUntil(at(12, 22, 30), c))));
+  /* Cut on a Thursday. This roster is Sunday to Thursday — the owner's real one — so Friday
+     and Saturday are off and the next shift is SUNDAY. The question has to survive the whole
+     gap rather than expiring into it. */
+  ok('across the days off, to the next rostered start',
+     E.otAskUntil(at(13, 22, 30), c) === at(16, 14),
+     String(new Date(E.otAskUntil(at(13, 22, 30), c))));
+  ok('and it never expires before the hours were cut', E.otAskUntil(at(12, 22, 30), c) > at(12, 22, 30));
 }
 
 /* ------------------------------------------------------------------ */

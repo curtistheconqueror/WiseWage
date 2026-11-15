@@ -124,6 +124,73 @@ kept firing, leaving a feature starting shifts that the user could not see or sw
 
 ---
 
+## A clock nobody closed
+
+Reported from real use: a punch left running for weeks, its live figure climbing thousands
+of dollars past anything worked. Three things were true, and only the third was a bug.
+
+**A scheduled end never stopped anything.** `schedEnd` is an overtime boundary, a time-card
+figure and a holiday yardstick. Nothing used it to end a shift. The only auto-stop was the
+duration tickbox (`planOn`), which is a different feature behind a different switch, so
+somebody who set a rostered finish and expected the clock to respect it was out of luck.
+
+**The forgotten-shift banner worked.** It is easy to look at this incident and blame the
+banner, and that is wrong: it asks *and* offers the correct end in one tap, and that is what
+rescued the record. Do not "fix" it.
+
+**The counting was the bug.** The figure kept climbing while the question went unanswered,
+because answering needs the app open and the app was shut.
+
+### What it does now
+
+`cfg.autoOut` (**off** by default) closes a shift at its rostered end, retroactively, on the
+next open — nothing can fire at 22:30 in a closed page, so the end is reconstructed rather
+than scheduled. It raises `state.otAsk`, the "worked overtime?" prompt: first thing in the
+clock card, above the money, 44px targets, **in stored state** so closing the app cannot
+answer it, alive until the next rostered shift is due. Answering "yes" takes a time and
+accepts the earliest reading of it that is after the clock-in and not in the future — so it
+corrects an end *earlier* than the cut as readily as later.
+
+`liveAccrualCap` is the unconditional half, and the important one. Past a day on the clock
+the live figure freezes at the end the banner is already offering, and **nothing is banked**.
+That restraint is deliberate: writing a shift nobody confirmed is the one thing this app has
+never done, `tests/ui/shortcut.mjs` and `smoke` both assert it by name, and an invented end
+in a pay record is worse than an open question. The label reads "paused, see below" so a
+stalled number explains itself, and "No, it is still running" lifts the cap — which is also
+the "let it keep going" option that was asked for.
+
+Two traps found while building it, both worth knowing:
+
+- **The live shift is built in several places.** `liveSession()` looked like the chokepoint
+  and was not: four renderers assembled their own row inline, so the cap reached some figures
+  and not the big one on the clock card. They all route through it now. If you add a figure
+  derived from the running shift, use `liveSession`.
+- **`forgotDismissed` belongs in the ledger cache key.** The cap depends on it, so leaving it
+  out meant answering "it is still running" changed nothing until something else happened to
+  move the key.
+
+### Also fixed here
+
+A backup taken mid-shift silently lost the running clock: `activeAdj` was exported and
+`activeStart` was not. Found in a real backup file. `activeStart`, `autoLast` and `otAsk` are
+all written now. Restoring an old file can therefore bring back a weeks-old clock, which used
+to be the argument against writing it — safe now, because the cap freezes it on arrival and
+the banner asks.
+
+### Open, from the same backup
+
+- **A schedule can be wrong without anything saying so.** One real install held a rostered
+  shift that matched neither the owner's stated hours nor their logged pattern, and every
+  roster-derived figure had been quietly using it. Nothing in the app sanity-checks the
+  roster against the log. A "your shifts do not look like your schedule" nudge would have
+  caught it months earlier.
+- **Auto clock-in and the DST boundary.** In that log, the shift on the day US daylight
+  saving ended began an hour off the configured auto time. One data point, not a diagnosis:
+  `checkAutoIn` builds its target with `dkey`/date parts, so it needs reading before anyone
+  claims either way.
+
+---
+
 ## Scanning — and why it is about to move
 
 Photograph a punch card; a vision model returns strict JSON of the stamps; deterministic

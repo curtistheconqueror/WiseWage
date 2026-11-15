@@ -465,6 +465,23 @@
   .forgot .frow{display:flex;gap:9px;flex-wrap:wrap;margin-top:10px}
   .forgot .frow .btn{flex:1 1 auto;min-height:44px}
   .forgot .frow .mini{min-height:44px}
+  /* The overtime question. Same family as the bar above, deliberately louder: it is the
+     first thing in the card, it survives the app being closed, and it stays up until the
+     next shift is due — "so its impossible to miss". */
+  .otask{margin:0 0 14px;padding:13px 14px;border-radius:14px;text-align:left;
+    background:color-mix(in srgb,var(--acc) 13%,transparent);
+    border:1.5px solid color-mix(in srgb,var(--acc) 55%,transparent)}
+  .otask .okey{display:block;font-size:10.8px;font-weight:800;letter-spacing:.7px;
+    text-transform:uppercase;color:var(--acc);margin-bottom:5px}
+  .otask .otxt{font-size:14.4px;line-height:1.45;color:var(--ink)}
+  .otask .otxt b{color:var(--ink)}
+  .otask .orow{display:flex;gap:9px;flex-wrap:wrap;margin-top:11px;align-items:center}
+  .otask .orow .btn{flex:1 1 auto;min-height:44px}
+  .otask .orow .mini{min-height:44px}
+  .otask .orow label{font-size:13.4px;color:var(--muted)}
+  .otask .orow input[type=time]{min-height:44px;font-family:inherit;font-size:15px;
+    background:var(--card-solid,#121a2e);color:var(--ink);border:1px solid var(--border);
+    border-radius:10px;padding:0 10px}
   .netline{font-size:13.6px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px}
   .netline b{color:var(--ink)}
   .money.inhole{background:none;-webkit-text-fill-color:var(--bad);color:var(--bad)}
@@ -1411,6 +1428,25 @@
       <button class="hchev" id="heroChev" aria-label="expand">▾</button>
     </div>
     <div class="colbody">
+    <!-- Asked when a shift was closed for you at your scheduled end, or cut back because it
+         had been left running. The hours that were cut are offered straight back here, so
+         nothing is taken on the app's word. It is FIRST in the card on purpose, and it lives
+         in stored state rather than a variable so that closing the app does not answer it. -->
+    <div class="otask hide" id="otAsk">
+      <span class="okey" id="otAskKey">Worked overtime?</span>
+      <div class="otxt" id="otAskTxt"></div>
+      <div class="orow" id="otAskPick">
+        <button class="btn go" id="otAskYes">Yes — I stayed later</button>
+        <button class="mini" id="otAskNo">No, that is right</button>
+      </div>
+      <div class="orow hide" id="otAskWhen">
+        <label for="otAskTime">I clocked out at</label>
+        <input type="time" id="otAskTime">
+        <button class="btn go" id="otAskSave">Save</button>
+        <button class="mini" id="otAskBack">Back</button>
+      </div>
+      <div class="eerr hide" id="otAskErr"></div>
+    </div>
     <div class="paymode" id="payMode">
       <button data-p="gross" class="on">GROSS</button><button data-p="net">NET</button>
     </div>
@@ -2402,6 +2438,13 @@
         <div class="f"><label for="cSchedStart2">Scheduled start</label><input type="time" id="cSchedStart2"></div>
         <div class="f"><label for="cSchedEnd2">Scheduled end</label><input type="time" id="cSchedEnd2"></div>
       </div>
+      <div class="f" style="margin-top:18px"><label for="cAutoOut">Clock out at my scheduled end</label>
+        <select id="cAutoOut">
+          <option value="1">Yes — and ask if I stayed later</option>
+          <option value="0">No — leave the clock running</option>
+        </select>
+        <div class="note">Applied when you next open the app, since nothing can run while it
+        is closed. A clock left running is always ended, whichever you pick.</div></div>
       <div class="f" style="margin-top:18px"><label>Days you are scheduled to work</label>
         <div class="note">Your roster. Holiday rules count shifts from here, not dates.</div>
       </div>
@@ -2937,6 +2980,21 @@ var DEFAULTS = {
   vacations: [],             // blocks of approved leave: {id, name, from, to, hours, ot}
   schedStart: '09:00',       // the scheduled shift, for working out extra time
   schedEnd: '17:00',
+  /* Close a running shift at that scheduled end, retroactively, when the app is next
+     opened — see "ending a shift nobody ended".
+
+     OFF by default, and the reason is worth keeping: plenty of people routinely work past
+     their rostered finish, so for them closing at the roster cuts almost every shift short
+     and asks about it every single day. That is the crying-wolf failure the forgotten-shift
+     banner was written to avoid, and a question asked daily is a question answered unread.
+     Checked against a real log before choosing the default, not guessed at.
+
+     It also pre-empts that banner: with this on, a shift past its rostered end is closed
+     before the banner can offer the gentler "is this still running?".
+
+     The protection against a clock nobody closed does NOT live here. That is the runaway
+     floor, which has no setting at all. */
+  autoOut: false,
   /* Which days of the week you are rostered for, Sunday first. Holiday eligibility is
      judged against these, not against the calendar week, so "the day before and the day
      after" means the shifts either side of the holiday rather than whatever dates happen
@@ -5090,6 +5148,106 @@ function forgottenShift(activeStart, nowMs, cfg, sessions){
            overnight: +midnight(now) > day };
 }
 
+/* ============================ ending a shift nobody ended ============================
+
+   A web page cannot clock anybody out while it is closed. No timer runs, no code executes,
+   nothing fires at 22:30. So "clock out at my scheduled end" cannot work the way it sounds:
+   it has to be RECONSTRUCTED on the next open — work out when the shift should have ended
+   and close it there, retroactively.
+
+   That distinction is the whole reason a clock here ran for weeks and counted thousands of
+   dollars nobody earned. The app already had a banner that noticed and asked about it, and
+   asking was all it did: the clock kept running behind the question and the money kept
+   climbing. A question is not a brake.
+
+   Two different jobs below, and the difference matters.
+
+   `schedOutAt` is the end somebody CHOSE — their rostered finish. Acting on it is opt-in,
+   because a twelve-hour day on an eight-hour roster is a real thing and cutting it short
+   every shift would be wrong.
+
+   `runawayOutAt` is the floor nobody chooses and nobody can switch off. A shift still
+   running a full day later is not a long shift; it is a punch nobody closed. There is no
+   setting under which counting it is correct, so there is no setting that permits it. */
+
+var RUNAWAY_H = 24;
+
+/* The rostered end of the day this shift began on, or null when there is no schedule to
+   judge it by. `schedEndMs` already carries the end past midnight when the roster does, so
+   a 14:00–22:30 run is one window rather than two. Returns null when that end is not
+   actually after the start, which is what happens when somebody clocks in during the
+   evening on a nine-to-five roster — there is nothing sensible to cut to. */
+function schedOutAt(activeStart, cfg){
+  if (!activeStart || !cfg) return null;
+  if (hhmmToMin(cfg.schedStart) == null || hhmmToMin(cfg.schedEnd) == null) return null;
+  var day = +midnight(activeStart);
+  if (!isWorkDay(cfg, new Date(day).getDay())) return null;
+  var end = schedEndMs(cfg, day);
+  return end > activeStart ? end : null;
+}
+
+/* The same end, but only for somebody who asked for it. */
+function autoOutAt(activeStart, cfg){
+  return (cfg && cfg.autoOut) ? schedOutAt(activeStart, cfg) : null;
+}
+
+/* Where to cut a shift that has been running so long it cannot be real.
+
+   The end is chosen in the order of how much it is worth trusting: what the forgotten-shift
+   detector already works out from this person's own history, then their rostered finish,
+   then a flat cap. Never later than now, and never before the start. */
+function runawayOutAt(activeStart, nowMs, cfg, sessions){
+  if (!activeStart) return null;
+  if (nowMs - activeStart < RUNAWAY_H * HOUR_MS) return null;
+  var at = null;
+  var f = forgottenShift(activeStart, nowMs, cfg, sessions);
+  if (f && f.suggested > activeStart) at = f.suggested;
+  if (at == null){
+    var sched = schedOutAt(activeStart, cfg);
+    if (sched != null) at = sched;
+  }
+  if (at == null) at = activeStart + RUNAWAY_H * HOUR_MS;
+  return Math.min(at, nowMs);
+}
+
+/* When a shift should be cut, and why — the one call the UI makes.
+   `sched` means the end they chose. `runaway` means the floor. Null means leave it alone. */
+function shiftCutAt(activeStart, nowMs, cfg, sessions){
+  if (!activeStart) return null;
+  var chosen = autoOutAt(activeStart, cfg);
+  if (chosen != null && nowMs >= chosen) return { at: chosen, why: 'sched' };
+  /* A runaway is deliberately NOT banked here.
+     Writing a shift nobody confirmed is the one thing this app has always refused to do —
+     `tests/ui/shortcut.mjs` asserts that a punch left running for a day stays open, and
+     `smoke` that eighty hours are never banked silently. Both are right: the end would be
+     a guess, and a guess written into a pay record is worse than an open question.
+     What a runaway gets instead is `liveAccrualCap`, which stops the figure climbing while
+     the banner asks. `runawayOutAt` is kept because that cap uses the same reasoning. */
+  return null;
+}
+
+/* How long the question about those cut hours stays up.
+
+   Until the next shift they are rostered for is about to begin — the owner's words were
+   that it should "stay primed for at least up until i get ready for my regular shift time
+   the next day so it can't be missed". A prompt that expires overnight is a prompt that
+   gets missed, which is how the hours went uncorrected in the first place.
+
+   Days are stepped through the calendar rather than by adding 86,400,000, so the hour does
+   not drift across a daylight-saving boundary. */
+function otAskUntil(endedAtMs, cfg){
+  var ss = cfg ? hhmmToMin(cfg.schedStart) : null;
+  var d = new Date(+midnight(endedAtMs));
+  for (var i = 1; i <= 8; i++){
+    var probe = +midnight(new Date(d.getFullYear(), d.getMonth(), d.getDate() + i));
+    if (cfg && isWorkDay(cfg, new Date(probe).getDay())){
+      return ss == null ? probe : probe + ss * 60000;
+    }
+  }
+  // No roster to go by: a day is still long enough to be seen at least once.
+  return +midnight(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1));
+}
+
 /* ============================ the paper time sheet ============================
    Some employers still want a signed paper record — a daily sign-in/out sheet filled in by
    hand, initialled per row, submitted every period. Even salaried people get handed one.
@@ -6003,7 +6161,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v94';
+var APP_BUILD = 'v95';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -6219,7 +6377,12 @@ function load(){
                sessions: [], absences: [], units: [], stipends: [], otHist: [],
                activeStart: null, activeAdj: null,
                unit: 'sec', planOn: false, plannedHours: 8, sound: true,
-               configured: false, autoOn: false, autoAt: '', autoDays: null, autoLast: '' };
+               configured: false, autoOn: false, autoAt: '', autoDays: null, autoLast: '',
+               /* The outstanding "did you work past your scheduled end?" question. Kept in
+                  stored state rather than a variable, because the whole point of it is to
+                  survive the app being closed — the earlier dismissal flags live in memory
+                  and forget themselves on every reload. */
+               otAsk: null };
   try {
     var raw = localStorage.getItem(KEY);
     if (raw){
@@ -6919,8 +7082,38 @@ function undoAutoIn(){
 /* The shift running right now, as a session the ledger can price. Built in one place so
    a per-shift adjustment — a reopened holiday or differential shift — cannot be carried
    by one caller and quietly dropped by another. */
+/* The one place a running shift becomes a ledger row — so the cap below freezes every
+   figure derived from it at once, rather than in a dozen renderers that could disagree. */
 function liveSession(id, end){
-  return { id: id, start: state.activeStart, end: end, adj: state.activeAdj || undefined };
+  var cap = liveAccrualCap(end);
+  return { id: id, start: state.activeStart, end: cap < end ? cap : end,
+           adj: state.activeAdj || undefined };
+}
+
+/* Stop COUNTING long before anything is banked.
+
+   A punch nobody closed used to accrue until somebody opened the app and answered the
+   banner — and one ran for weeks, reaching a figure thousands of dollars past anything
+   worked. The correction itself worked: the banner asks and offers the right end in one
+   tap, and that is what rescued the record. The counting was the problem, not the asking.
+
+   So past the point of doubt the live figure stops at the same end the banner is already
+   offering, and NOTHING is written: the shift stays open, the question stays unanswered,
+   and the money stops climbing. That matters because the alternative — banking a shift on
+   the app's own authority — is the one thing this app has always refused to do, and two
+   suites assert it by name.
+
+   The threshold is a day, well past the banner's own, because a long shift is a real thing
+   and freezing somebody's earnings the moment they work late would be its own kind of
+   wrong. And "No, it is still running" is honoured: say the clock is right and it counts. */
+function liveAccrualCap(end){
+  var active = state.activeStart;
+  if (!active) return end;
+  if (forgotDismissed === active) return end;          // told it is still running
+  if (end - active < RUNAWAY_H * HOUR_MS) return end;
+  var f = forgottenShift(active, end, state.cfg, jobSessions());
+  if (!f) return end;
+  return Math.max(active, f.suggested);
 }
 
 var lastOtState = false;
@@ -6976,6 +7169,34 @@ function render(){
       return;
     }
   }
+  /* A shift that should already have ended.
+
+     The app could not have closed it at the time — no code runs while the page is shut —
+     so it is closed NOW, at the time it should have ended, and the hours that were cut are
+     offered straight back by the prompt this raises. Nothing is taken on the app's word.
+
+     This runs before anything is drawn, so the figures that appear are the corrected ones
+     rather than a runaway total that gets quietly swapped a frame later. */
+  if (active){
+    var cut = shiftCutAt(active, now, cfg, jobSessions());
+    if (cut){
+      var hoursCut = Math.round((((now - cut.at) / HOUR_MS)) * 100) / 100;
+      clockOut(cut.at, true);                       // saves and redraws
+      var banked = state.sessions[state.sessions.length - 1];
+      /* Anchored on the moment the question is RAISED, not on the hours it is about.
+         A runaway is discovered long after it started: anchoring on the cut made the
+         question expire nineteen days before anyone could see it, so the one case this
+         exists for was the one case it did not work. */
+      state.otAsk = { shiftId: banked ? banked.id : null, at: cut.at, why: cut.why,
+                      until: otAskUntil(Math.max(cut.at, now), cfg), cutHours: hoursCut };
+      save();
+      renderOtAsk();
+      toast(cut.why === 'sched'
+        ? '🛑 Clocked out at ' + ptime(cut.at) + ' — your scheduled end.'
+        : '🛑 This clock had been left running. Ended at ' + ptime(cut.at) + '.');
+      return;
+    }
+  }
   tickWhileActive = active ? now : 0;
 
   /* Nothing drawn from this ledger is finer than a second, so a second is the resolution
@@ -6985,7 +7206,11 @@ function render(){
      on the page reads from, so it is the one place a second employer's hours would leak in.
      The key carries the job for the same reason: switching job must not serve the cached
      ledger of the one you just left. */
-  var ledger = cachedLedger('main', dataVer + '|' + state.activeJob + '|' + liveSec, function(){
+  /* `forgotDismissed` belongs in the key: the live shift's accrual is capped once a punch
+     is past doubt, and saying "it is still running" lifts that cap. Leave it out and the
+     answer has no effect until something else happens to change the key. */
+  var ledger = cachedLedger('main', dataVer + '|' + state.activeJob + '|' + liveSec
+                                  + '|' + forgotDismissed, function(){
     var all = jobSessions();
     if (active) all = all.concat([liveSession('__active', Math.max(active, liveSec))]);
     return buildLedger(all, cfg);
@@ -7023,8 +7248,9 @@ function render(){
   // the toggle: recompute the shift as of the last tick of the chosen unit
   var shownGross = shift.gross, dp = 2, qEnd = active ? active + quantize(elapsed, state.unit) : now;
   if (active){
-    var q = cachedLedger('q', dataVer + '|' + state.activeJob + '|' + qEnd, function(){
-      return jobLedger([{ id: '__q', start: active, end: Math.max(active, qEnd) }], cfg);
+    var q = cachedLedger('q', dataVer + '|' + state.activeJob + '|' + qEnd
+                              + '|' + forgotDismissed, function(){
+      return jobLedger([liveSession('__q', Math.max(active, qEnd))], cfg);
     });
     shownGross = sumSession(q.parts, '__q').gross;
     dp = state.unit === 'sec' ? 4 : 2;
@@ -7063,6 +7289,7 @@ function render(){
   }
   show('netline', netOn);
   renderForgot(active, now);
+  renderOtAsk();
   renderHolBar(now);
   renderHolBar(now);
   if (txt !== lastMoney){
@@ -7086,6 +7313,15 @@ function render(){
   var perUnit = state.unit === 'hr' ? rateNow : state.unit === 'min' ? rateNow / 60 : rateNow / 3600;
   var unitName = state.unit === 'hr' ? 'hour' : state.unit === 'min' ? 'minute' : 'second';
   show('moneyLbl', !!active);
+  /* An unexplained number that has stopped moving is its own kind of wrong. When a punch is
+     past doubt its figure is frozen at the last hour that could plausibly have been worked,
+     so the label says so rather than leaving somebody to wonder why their earnings stalled.
+     The banner right below gives the whole story and the one-tap fix. */
+  if (active){
+    var capped = liveAccrualCap(now) < now;
+    el('moneyLbl').textContent = capped ? 'this shift · paused, see below' : 'this shift';
+    el('moneyLbl').style.color = capped ? 'var(--warn, #e8a33d)' : '';
+  }
   document.getElementById('liveline').innerHTML = active
     ? 'earning <b>' + money(perUnit, state.unit === 'sec' ? 4 : state.unit === 'min' ? 4 : 2) + '</b> / ' + unitName
       + ' &nbsp;·&nbsp; live <b>' + money(shift.gross, 4) + '</b>'
@@ -8787,7 +9023,7 @@ function renderExtra(period, active, now){
   var rows = jobSessions().filter(function(s){
     return s.end > period.startMs && s.start < period.endMs;
   }).slice();
-  if (active && active < period.endMs) rows.push({ id: '__active', start: active, end: now, live: true });
+  if (active && active < period.endMs) rows.push(Object.assign(liveSession('__active', now), { live: true }));
   rows.sort(function(a, b){ return a.start - b.start; });
 
   var tb = 0, ta = 0, tmin = 0, html = '';
@@ -10024,7 +10260,16 @@ function backup(){
     stipends: state.stipends, otHist: state.otHist,
     configured: state.configured, theme: state.theme, net: state.net, ui: state.ui,
     unit: state.unit, planOn: state.planOn, plannedHours: state.plannedHours, sound: state.sound, calc: state.calc, calCal: state.calCal, activeAdj: state.activeAdj,
-    autoOn: state.autoOn, autoAt: state.autoAt, autoDays: state.autoDays
+    autoOn: state.autoOn, autoAt: state.autoAt, autoDays: state.autoDays,
+    /* A backup taken mid-shift used to lose the running clock: `activeAdj` was written and
+       `activeStart` was not, so restoring it clocked you out and the shift vanished. Found
+       in a real backup. `autoLast` keeps auto clock-in from re-firing for a day already
+       dealt with, and `otAsk` keeps an unanswered overtime question from being lost.
+
+       Restoring an old file can now bring back a clock that started weeks ago, which used
+       to be a reason not to write it. It is safe because the live figure is capped once a
+       punch is past doubt — the shift comes back open and asked about, not accruing. */
+    activeStart: state.activeStart, autoLast: state.autoLast, otAsk: state.otAsk
   }, null, 2);
   var name = APP_ID + '-backup-' + dateInput(new Date()) + '.json';
   if (download(name, payload, 'application/json')) toast('Backup saved — ' + state.sessions.length + ' shifts.');
@@ -11557,6 +11802,10 @@ document.getElementById('cSound').onchange = function(e){ state.sound = e.target
 /* The scheduled shift is edited in one place now. It used to be mirrored into the Decimal
    Time Conversion card as well, which put a live settings field in a section that reads as
    a calculator — see the note beside that card. */
+document.getElementById('cAutoOut').onchange = function(e){
+  state.cfg.autoOut = e.target.value === '1';
+  save(); syncControls(); lastMoney = ''; lastHeavySig = ''; render();
+};
 ['cSchedStart2', 'cSchedEnd2'].forEach(function(id){
   document.getElementById(id).onchange = function(e){
     var key = id.indexOf('Start') > -1 ? 'schedStart' : 'schedEnd';
@@ -11622,6 +11871,7 @@ function syncControls(){
   var s1 = el('cSchedStart2'), s2 = el('cSchedEnd2');
   if (document.activeElement !== s1) s1.value = state.cfg.schedStart || '';
   if (document.activeElement !== s2) s2.value = state.cfg.schedEnd || '';
+  el('cAutoOut').value = state.cfg.autoOut === false ? '0' : '1';
   el('cShiftDay').value = state.cfg.shiftDayRule || 'majority';
   /* Worked through with the user's own scheduled shift, so the setting is judged on their
      hours rather than on an abstraction. */
@@ -12014,6 +12264,101 @@ function renderForgot(activeStart, now){
     + (lost > 0.005 ? ', worth <span class="pay">' + money(lost) + '</span>' : '') + '.';
   el('forgotFix').textContent = 'End it at ' + ptime(f.suggested);
 }
+
+/* ---- the overtime question ----
+
+   Raised when a shift was closed for somebody rather than by them: at their scheduled end,
+   or cut back because it had been left running. It asks one thing and offers the cut hours
+   straight back.
+
+   It is kept in STORED state, not in a variable. Every other dismissal flag in this file
+   lives in memory and forgets itself on reload, which is fine for a question you are being
+   asked while you watch. This one has to survive the app being closed, because that is
+   exactly when it gets raised, and it stays up until the next shift is due so it cannot be
+   missed in between. */
+function renderOtAsk(){
+  var a = state.otAsk;
+  var shift = a && a.shiftId ? sessionById(a.shiftId) : null;
+  /* Gone when answered, when the shift it is about has been deleted, or when the next shift
+     is due — by then it is history and the log is the place to fix it. */
+  if (a && (!shift || Date.now() >= (a.until || 0))){
+    state.otAsk = null; save(); a = null;
+  }
+  show('otAsk', !!a);
+  if (!a) return;
+
+  /* No point being first in the card if the card is folded over it. */
+  var card = el('hero');
+  if (card && !card.classList.contains('open')) card.classList.add('open');
+
+  var cutH = a.cutHours || 0;
+  el('otAskKey').textContent = a.why === 'sched' ? 'Worked overtime?' : 'Clock left running';
+  el('otAskTxt').innerHTML = a.why === 'sched'
+    ? 'You were clocked out at <b>' + ptime(a.at) + '</b> on <b>' + fdate(new Date(a.at))
+      + '</b>, your scheduled end. Did you stay and work past it?'
+      + (cutH > 0.01 ? ' <span style="color:var(--muted)">The app had been counting '
+        + cutH.toFixed(2) + ' h beyond that and has stopped.</span>' : '')
+    : 'This clock had been left running, so it was ended at <b>' + ptime(a.at) + '</b> on <b>'
+      + fdate(new Date(a.at)) + '</b> — the time your shift should have finished.'
+      + (cutH > 0.01 ? ' <span style="color:var(--muted)">' + cutH.toFixed(2)
+        + ' h it had counted since then were dropped, and were never worked.</span>' : '')
+      + ' Is that right?';
+  // Prefilled with the time it was cut at, so staying twenty minutes is a two-tap change.
+  if (!el('otAskTime').value){
+    var d = new Date(a.at);
+    el('otAskTime').value = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+}
+
+function otAskErr(msg){
+  if (!msg){ show('otAskErr', false); return; }
+  el('otAskErr').textContent = msg; show('otAskErr', true);
+}
+function otAskClose(){
+  state.otAsk = null; save();
+  show('otAskWhen', false); show('otAskPick', true); otAskErr('');
+  el('otAskTime').value = '';
+  lastMoney = ''; lastHeavySig = ''; _ledCache = {}; render();
+}
+
+document.getElementById('otAskYes').onclick = function(){
+  show('otAskPick', false); show('otAskWhen', true); otAskErr('');
+  try { el('otAskTime').focus({ preventScroll: true }); } catch(e){}
+};
+document.getElementById('otAskBack').onclick = function(){
+  show('otAskWhen', false); show('otAskPick', true); otAskErr('');
+};
+document.getElementById('otAskNo').onclick = function(){
+  otAskClose();
+  toast('Left as it is. Edit it in the shift log if that changes.');
+};
+document.getElementById('otAskSave').onclick = function(){
+  var a = state.otAsk; if (!a) return;
+  var shift = sessionById(a.shiftId);
+  if (!shift){ otAskClose(); return; }
+  var mins = hhmmToMin(el('otAskTime').value);
+  if (mins == null){ otAskErr('Pick the time you actually clocked out.'); return; }
+  /* The time of day alone does not say which day: 1 AM after a 2 PM start is tomorrow, and
+     9 PM is tonight. So take the earliest reading of it that is after the shift started and
+     is not in the future — which also lets somebody correct the end EARLIER than the cut,
+     not only later. */
+  var day = +midnight(a.at), now = Date.now();
+  var end = day + mins * 60000;
+  if (end <= shift.start) end += DAY_MS;
+  if (end <= shift.start){ otAskErr('That is before this shift started.'); return; }
+  if (end > now){ otAskErr('That is in the future.'); return; }
+  if (end - shift.start > 24 * HOUR_MS){
+    otAskErr('That would make the shift longer than a day. Fix it in the shift log instead.');
+    return;
+  }
+  shift.end = end;
+  var h = (end - shift.start) / HOUR_MS;
+  state.otAsk = null;
+  show('otAskWhen', false); show('otAskPick', true); otAskErr('');
+  el('otAskTime').value = '';
+  save(); lastMoney = ''; lastHeavySig = ''; _ledCache = {}; render();
+  toast('Clocked out at ' + ptime(end) + ' — ' + h.toFixed(2) + ' h banked.');
+};
 
 /* Clocking out on a shift that looks forgotten asks instead of banking it silently. The
    answer is always the user's — this only refuses to make the expensive choice for them. */
@@ -13531,7 +13876,7 @@ function runShortcutAction(after){
     var cfg = state.cfg;
     var dayMs = todayShiftDay(jobSessions(), active, cfg, now);
     var owners = jobSessions().slice();
-    if (active) owners.push({ id: '__active', start: active, end: now });
+    if (active) owners.push(liveSession('__active', now));
     var led = buildLedger(owners, cfg, now);
     var tot = sumShiftDay(led.parts, owners, cfg, dayMs);
     var gross = tot.gross, hrs = tot.hours;
@@ -13539,7 +13884,7 @@ function runShortcutAction(after){
     if (wnc.enabled && wnc.configured){
       var wp = periodInfo(now, cfg);
       var wAll = jobSessions().slice();
-      if (active) wAll.push({ id: '__wa', start: active, end: now });
+      if (active) wAll.push(liveSession('__wa', now));
       var wLed = buildLedger(wAll, cfg);
       var wTot = sumRange(wLed.parts, wp.startMs, wp.endMs);
       var wPremBefore = Math.max(0, otPremiumOf(ytdSums(wLed, now)) - otPremiumOf(wTot));
