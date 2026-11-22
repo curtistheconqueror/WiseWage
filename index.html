@@ -479,6 +479,17 @@
   .otask .orow .btn{flex:1 1 auto;min-height:44px}
   .otask .orow .mini{min-height:44px}
   .otask .orow label{font-size:13.4px;color:var(--muted)}
+  .cfgsave{display:flex;align-items:center;gap:13px;margin-top:18px;padding-top:14px;
+    border-top:1px solid var(--border)}
+  .cfgsave .btn{min-height:44px;padding:11px 32px;font-size:14.6px}
+  .cfgsaved{color:var(--ok);font-size:13.4px;font-weight:700;letter-spacing:.3px}
+  .scheddrift{margin-top:14px;padding:12px 14px;border-radius:14px;text-align:left;
+    background:color-mix(in srgb,var(--warn,#e8a33d) 13%,transparent);
+    border:1px solid color-mix(in srgb,var(--warn,#e8a33d) 48%,transparent)}
+  .scheddrift .sdtxt{font-size:13.8px;line-height:1.45;color:var(--ink)}
+  .scheddrift .sdrow{display:flex;gap:9px;flex-wrap:wrap;margin-top:10px}
+  .scheddrift .sdrow .btn{flex:1 1 auto;min-height:44px}
+  .scheddrift .sdrow .mini{min-height:44px}
   .otask .orow input[type=time]{min-height:44px;font-family:inherit;font-size:15px;
     background:var(--card-solid,#121a2e);color:var(--ink);border:1px solid var(--border);
     border-radius:10px;padding:0 10px}
@@ -1631,6 +1642,17 @@
       <label class="swrap" id="wPayWrap" style="justify-content:center;margin-top:13px">
         <input type="checkbox" id="wPay"> Show what it pays</label>
       <div class="wifnote hide" id="wifMoney"></div>
+      <!-- Shown only when the rostered shift disagrees with the shifts actually logged. The
+           roster is quietly load-bearing — overtime splits, holiday eligibility, the decimal
+           time card and this card all measure against it — and nothing used to check it, so
+           a wrong one stayed wrong and every derived figure was wrong with it. -->
+      <div class="scheddrift hide" id="schedDrift">
+        <div class="sdtxt" id="schedDriftTxt"></div>
+        <div class="sdrow">
+          <button class="btn go" id="schedDriftFix">Check my schedule</button>
+          <button class="mini" id="schedDriftNo">Leave it</button>
+        </div>
+      </div>
     </div>
     </div>
   </section>
@@ -5096,6 +5118,68 @@ function shiftShape(sessions){
            longest: sorted[sorted.length - 1] };
 }
 
+/* ---- a rostered shift that does not match the shifts actually worked ----
+
+   The roster is quietly load-bearing: overtime splits, holiday eligibility, the decimal
+   time card and the what-if all measure against it. Nothing ever checked it, so one that
+   was wrong stayed wrong, and every figure derived from it was wrong in the same direction
+   without a single number looking odd.
+
+   It showed up as a what-if reporting 0.80 h outside the shift for somebody going in an
+   hour and a half early: correct arithmetic against a start time that was 48 minutes off
+   what they actually work.
+
+   Compares the stored roster with the median start and end of recent shifts. The median,
+   not the mean, so one forgotten punch does not drag it.
+
+   Only fires in ONE direction, and the direction is the whole idea: when the roster is
+   WIDER than the shifts actually worked. Nobody consistently works less than they are
+   rostered for, so a roster claiming hours nobody works is a roster that is wrong.
+
+   The other direction — clocking in early and out late — is just overtime, and overtime is
+   the thing this app exists to count. Warning about it would nag the people using it
+   correctly, and a warning that fires on normal behaviour is one nobody reads.
+
+   A roster wider than the real shift is also the expensive mistake: overtime either side is
+   measured against it, so every hour the roster overstates is an hour of claimable overtime
+   that silently stops being claimable. */
+var SCHED_DRIFT_MIN = 30;
+
+function schedDrift(sessions, cfg){
+  if (!cfg) return null;
+  var ss = hhmmToMin(cfg.schedStart), se = hhmmToMin(cfg.schedEnd);
+  if (ss == null || se == null) return null;
+  var ins = [], outs = [];
+  var list = (sessions || [])
+    .filter(function(s){ return s && s.end > s.start && (s.end - s.start) > HOUR_MS; })
+    .sort(function(a, b){ return b.start - a.start; })
+    .slice(0, 20);
+  if (list.length < 5) return null;                 // too little to generalise from
+  for (var i = 0; i < list.length; i++){
+    var a = new Date(list[i].start), b = new Date(list[i].end);
+    ins.push(a.getHours() * 60 + a.getMinutes());
+    /* An end past midnight is measured on the same dial as the roster's, which schedEndMs
+       already carries over, so 00:30 reads as 1470 rather than 30 and does not look like a
+       twenty-three-hour disagreement. */
+    var om = b.getHours() * 60 + b.getMinutes();
+    if (om < ins[ins.length - 1]) om += 1440;
+    outs.push(om);
+  }
+  var mid = function(arr){
+    var c = arr.slice().sort(function(x, y){ return x - y; });
+    return c[Math.floor(c.length / 2)];
+  };
+  var usualIn = mid(ins), usualOut = mid(outs);
+  var schedOut = se <= ss ? se + 1440 : se;
+  /* Positive means the roster claims time that is not worked: a start before anyone turns
+     up, an end after everyone has gone. Negative is overtime, and is none of this
+     function's business. */
+  var lateIn = usualIn - ss, earlyOut = schedOut - usualOut;
+  if (lateIn < SCHED_DRIFT_MIN && earlyOut < SCHED_DRIFT_MIN) return null;
+  return { usualIn: usualIn, usualOut: usualOut % 1440,
+           lateIn: Math.max(0, lateIn), earlyOut: Math.max(0, earlyOut), n: list.length };
+}
+
 function forgottenShift(activeStart, nowMs, cfg, sessions){
   if (!activeStart) return null;
   var now = nowMs == null ? Date.now() : nowMs;
@@ -6161,7 +6245,7 @@ var APP_NAME = 'WiseWage';
 /* Shown in the footer so "am I actually running the new build?" is answerable without
    guessing from whether a feature looks different. Must match CACHE in sw.js; a test
    asserts it, because a version marker that lies is worse than none. */
-var APP_BUILD = 'v95';
+var APP_BUILD = 'v96';
 var APP_ID   = 'wisewage';
 var APP_IDS  = { wisewage: 1, 'pay-clock': 1 };
 
@@ -8101,6 +8185,7 @@ function renderWhatIf(){
       + ((cfg.lunchMins || 0) ? ' after the ' + cfg.lunchMins + '-minute lunch' : '')
       + '</div></div>';
 
+  renderSchedDrift();
   show('wifMoney', !!uiOpen().wifPay);
   if (!uiOpen().wifPay) return;
 
@@ -8115,9 +8200,60 @@ function renderWhatIf(){
         ? ' &nbsp;·&nbsp; <span class="wifot">' + t.otHours.toFixed(2) + ' h at '
           + money(cfg.rate * (cfg.otMultiplier || 1.5)) + '/hr</span>'
         : ' &nbsp;·&nbsp; all straight time')
-    + '<br>Counted against the ' + t.hours.toFixed(2) + ' h this shift adds to what you have '
-    + 'already banked, so the overtime is what you would really be paid.';
+    /* Was: "Counted against the 11.00 h this shift adds to what you have already banked, so
+       the overtime is what you would really be paid." Three clauses to say one thing, and
+       the number in it was the shift's own hours, which read as if it were the banked
+       total. The point is only that the overtime figure is real rather than theoretical. */
+    + '<br>Counted on top of the hours you have already worked, so this is what the day '
+    + 'really pays.';
 }
+/* The roster is quietly load-bearing, and until now nothing ever questioned it. Shown
+   where a wrong one actually misleads — this card measures everything against it — with the
+   correction a single tap, because "go and work out your real hours" is not a fix anybody
+   performs. Dismissed per set of times, so it returns if the roster drifts again rather
+   than going quiet for good. */
+var schedDriftOff = '';
+function renderSchedDrift(){
+  var d = schedDrift(jobSessions(), state.cfg);
+  var key = d ? d.usualIn + '-' + d.usualOut : '';
+  if (!d || schedDriftOff === key){ show('schedDrift', false); return; }
+  var mm = function(m){ return pad2(Math.floor(m / 60) % 24) + ':' + pad2(m % 60); };
+  el('schedDriftTxt').innerHTML =
+    'Your schedule says <b>' + ftimeCfg(state.cfg.schedStart, state.cfg) + ' – '
+    + ftimeCfg(state.cfg.schedEnd, state.cfg) + '</b>, but your last ' + d.n
+    + ' shifts run <b>' + ftimeCfg(mm(d.usualIn), state.cfg) + ' – '
+    + ftimeCfg(mm(d.usualOut), state.cfg) + '</b> — inside it. Overtime either side is '
+    + 'measured against the schedule, so one set wider than your real shift hides overtime '
+    + 'you could claim. It should be the hours you are <b>rostered</b> for.';
+  show('schedDrift', true);
+}
+/* Deliberately does NOT write the usual times into the roster.
+
+   The first version of this did, and it would have cost money. The roster is the hours you
+   are rostered for; the median of what somebody works includes their overtime, so copying
+   it in moves the line that overtime is measured against and quietly stops that overtime
+   being claimable. On the log this was built from it cut the claimable figure from 3.00 h
+   to 1.73. Only the person knows their contracted hours, so this opens the field and gets
+   out of the way. */
+document.getElementById('schedDriftFix').onclick = function(){
+  var outer = document.querySelector('#cfg > details');
+  if (outer) outer.open = true;
+  var g = document.getElementById('gSched');
+  if (!g) return;
+  var u = uiOpen(); u.cfg = u.cfg || {}; u.cfg.gSched = true; save();
+  g.open = true;
+  try { g.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  catch (e){ g.scrollIntoView(); }
+  var f = document.getElementById('cSchedStart2');
+  if (f) setTimeout(function(){ try { f.focus({ preventScroll: true }); } catch(e){} }, 350);
+};
+document.getElementById('schedDriftNo').onclick = function(){
+  var d = schedDrift(jobSessions(), state.cfg);
+  schedDriftOff = d ? d.usualIn + '-' + d.usualOut : '';
+  show('schedDrift', false);
+  toast('Left as it is.');
+};
+
 /* Prefill: the shift you are on if you are clocked in, otherwise now — and your usual
    finish, so the common question is already answered before anything is typed. */
 function seedWhatIf(force){
@@ -11653,6 +11789,81 @@ function helpNoteHtml(key){
     host.insertAdjacentHTML('beforeend', helpNoteHtml(HELP_FOR[id]));
   });
 })();
+
+/* ---- a Save button in every settings group ----
+
+   Settings have always written on change, which is why nothing was ever lost — but it asks
+   somebody to take it on trust, and being asked to trust a pay record is not the same as
+   being shown. The owner's words: it "just does not feel right" to change a time and have
+   nothing to press.
+
+   A button that only reassured would be a placebo, so this one does real work.
+   `syncControls` deliberately skips a field that currently has focus, so a value typed and
+   not yet tapped away from lives in the input and nowhere else — on a phone, with a time
+   picker, that window is real. Blurring first commits it, and that is the difference
+   between a button that reassures and one that is doing the thing it claims.
+
+   Built from the group list rather than written into the markup seven times, so a group
+   added later gets one without anybody remembering to. Placed at the foot of the group's
+   own body, above the help disclosure where there is one. */
+(function fitCfgSave(){
+  var secs = document.querySelectorAll('#cfg .cfgsec');
+  for (var i = 0; i < secs.length; i++){
+    var body = secs[i].querySelector(':scope > .cfgbody');
+    if (!body || body.querySelector(':scope > .cfgsave')) continue;
+    var row = document.createElement('div');
+    row.className = 'cfgsave';
+    row.innerHTML = '<button class="btn go" type="button">Save</button>'
+                  + '<span class="cfgsaved" aria-live="polite"></span>';
+    // insertBefore(x, null) appends, so this handles a group with no help note too.
+    body.insertBefore(row, body.querySelector(':scope > .helpnote'));
+  }
+})();
+
+/* Which field was being edited when Save was pressed.
+
+   It has to be captured on pointerdown, because by the time the click handler runs the
+   focus has already moved to the button and `document.activeElement` is the button itself.
+   Reading it there looked right and committed nothing. */
+var cfgSaveFrom = null;
+document.getElementById('cfg').addEventListener('pointerdown', function(e){
+  if (!e.target.closest || !e.target.closest('.cfgsave .btn')) return;
+  var a = document.activeElement;
+  cfgSaveFrom = (a && a !== document.body && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) ? a : null;
+}, true);
+
+document.getElementById('cfg').addEventListener('click', function(e){
+  var btn = e.target.closest('.cfgsave .btn');
+  if (!btn) return;
+  /* Commit whatever is still being typed before writing.
+
+     Blurring alone is not enough to rely on: `change` fires for a user's own edit, and the
+     browser decides when. Firing it here makes the commit explicit, so the button does not
+     depend on an event somebody else owns.
+
+     ONLY the focused field, deliberately. Firing `change` across a whole group would run
+     every handler in it, and some of those do more than store a value — the holiday preset
+     select replaces the holiday list, the allowance select adds an allowance. Both happen
+     to be safe today because they blank themselves and bail on empty, but a Save button
+     whose safety depends on auditing every handler in the app forever is a trap waiting to
+     be sprung. The focused field is the only one that can be holding anything uncommitted,
+     so it is the only one that needs this. */
+  var body = btn.closest('.cfgbody');
+  var a = cfgSaveFrom;
+  cfgSaveFrom = null;
+  if (a && body && body.contains(a)){
+    try { a.dispatchEvent(new Event('change', { bubbles: true })); } catch (err){}
+    if (a.blur) a.blur();
+  }
+  save(); syncControls();
+  lastMoney = ''; lastHeavySig = ''; _ledCache = {}; render();
+  var note = btn.parentElement.querySelector('.cfgsaved');
+  if (note){
+    note.textContent = 'Saved';
+    clearTimeout(note._t);
+    note._t = setTimeout(function(){ note.textContent = ''; }, 2600);
+  }
+});
 
 document.getElementById('sSave').onclick = saveSetup;
 document.getElementById('sWorkDays').addEventListener('click', function(e){

@@ -191,6 +191,58 @@ the banner asks.
 
 ---
 
+## A roster nobody ever checked
+
+The roster is quietly load-bearing — overtime either side of a shift, the decimal time card,
+holiday eligibility and the what-if all measure against it. Nothing validated it, so one
+real install carried a rostered shift matching neither the owner's stated hours nor their
+logged pattern, and every derived figure was wrong in the same direction for months without
+one number ever looking odd. It surfaced as a what-if reporting 0.80 h outside the shift for
+somebody going in an hour and a half early: correct arithmetic, wrong yardstick.
+
+`schedDrift` compares the roster with the median start and end of recent shifts and fires in
+**one direction only** — when the roster is WIDER than the shifts actually worked. Nobody
+consistently works less than they are rostered for, so that is a roster that is wrong. The
+other direction is overtime, which is the thing this app exists to count; warning about it
+would nag the people using it correctly, and a warning that fires on normal behaviour is one
+nobody reads.
+
+**It does not offer to fix the times, and that restraint cost a rewrite to arrive at.** The
+first version had a "Use my usual times" button that copied the median in. The roster is the
+hours somebody is *rostered* for; the median of what they work includes their overtime, so
+writing it in moves the line overtime is measured against and quietly stops that overtime
+being claimable. Measured on the log it was built from, it cut the claimable figure from
+3.00 h to 1.73 — a fix, labelled as such, that took 1.27 h a day off what could be claimed.
+It now opens the field and gets out of the way, because only the person knows their
+contracted hours. `tests/ui/scheddrift.mjs` asserts the roster is left untouched, and prices
+the difference so nobody reintroduces the "helpful" version.
+
+## A Save button in every settings group
+
+Settings have always written on change, so nothing was ever lost — but being asked to trust
+a pay record is not the same as being shown, and the owner's words were that it "just does
+not feel right" to change a time and have nothing to press.
+
+A button that only reassured would be a placebo, and two attempts at this one were exactly
+that before the tests caught them:
+
+- The first relied on blur firing `change`. True for a real edit, but it depends on an event
+  the browser owns rather than anything this code does.
+- The second dispatched `change` explicitly — on `document.activeElement`, read inside the
+  click handler. By then the click had already moved focus to the button, so it committed
+  the button. It looked right and did nothing.
+
+The focused field is therefore captured on `pointerdown`, before focus moves. And only that
+field: firing `change` across a whole group would run every handler in it, and the holiday
+preset select replaces the holiday list while the allowance select adds an allowance. Both
+are safe today because they blank themselves and bail on empty, but a Save button whose
+safety rests on auditing every handler in the app forever is a trap waiting to be sprung.
+
+The rows are built from the group list rather than written into the markup, so a group added
+later gets one without anybody remembering to.
+
+---
+
 ## Scanning — and why it is about to move
 
 Photograph a punch card; a vision model returns strict JSON of the stamps; deterministic

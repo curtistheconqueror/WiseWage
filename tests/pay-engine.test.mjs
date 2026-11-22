@@ -50,6 +50,7 @@ const E = new Function(m[1] + `
            oteRand, otePeriodSamples, oteAllSamples, oteDrawPool, oteForecast, OTE_MIN_SAMPLES,
            forgottenShift, FORGOT_FALLBACK_H, shiftShape,
            schedOutAt, autoOutAt, runawayOutAt, shiftCutAt, otAskUntil, RUNAWAY_H,
+           schedDrift, SCHED_DRIFT_MIN,
            pctSplit, itemBasis,
            fedNotWithheld, netBreakdown, periodNetView,
            TAX_YEAR, TAX2026, bracketTax, fedWithholding };

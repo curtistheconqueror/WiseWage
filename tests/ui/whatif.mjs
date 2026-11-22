@@ -142,7 +142,11 @@ console.log('       ' + mny);
 ok('5.75 h of it is overtime', mny.includes('5.75 h at'), mny);
 ok('at $57.00/hr', mny.includes('$57.00'), mny);
 ok('so the day is $555.75', mny.includes('$555.75'), mny);
-ok('and it says what it counted against', mny.includes('already banked'), mny);
+/* Reworded: "Counted against the 11.00 h this shift adds to what you have already banked,
+   so the overtime is what you would really be paid" was three clauses for one idea, and the
+   number in it was the shift's own hours, which read as the banked total. */
+ok('and it says what it counted against',
+   mny.includes('Counted on top of the hours you have already worked'), mny);
 
 console.log('\n━━ An unscheduled day counts whole ━━');
 await p.close();
